@@ -16,11 +16,9 @@
 </nav>
 
 <div class="auth-wrap">
-
-  <!-- Форма регистрации -->
-  <div class="auth-box" id="form-box">
+  <div class="auth-box">
     <h2>Регистрация</h2>
-    <p>Создайте аккаунт — конфиг выдаётся сразу после подтверждения email</p>
+    <p>Создайте аккаунт — конфиг выдаётся сразу</p>
 
     <div id="error-msg" style="display:none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 0.6rem 0.9rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;"></div>
 
@@ -49,41 +47,17 @@
       Уже есть аккаунт? <a href="/login">Войти</a>
     </div>
   </div>
-
-  <!-- Экран подтверждения -->
-  <div class="auth-box" id="confirm-box" style="display:none; text-align:center;">
-    <div style="font-size: 3rem; margin-bottom: 1rem;">📧</div>
-    <h2>Проверьте почту</h2>
-    <p style="margin-bottom: 1.5rem;">Мы отправили письмо на <strong id="confirm-email"></strong>. Нажмите на ссылку в письме чтобы подтвердить email и получить доступ к VPN.</p>
-    <div style="background: var(--bg3); border-radius: 8px; padding: 1rem; font-size: 13px; color: var(--muted); margin-bottom: 1.5rem;">
-      Не получили письмо? Проверьте папку «Спам». Письмо приходит в течение 1–2 минут.
-    </div>
-    <button class="btn-outline" style="width:100%; padding: 0.65rem;" onclick="resend()" id="resend-btn">
-      Отправить повторно
-    </button>
-    <div class="auth-footer" style="margin-top:1rem;">
-      <a href="/login">Уже подтвердил → Войти</a>
-    </div>
-  </div>
-
 </div>
 
 <script>
-  let registeredEmail = '';
-
   function validateEmail(input) {
     const hint = document.getElementById('email-hint');
     const val = input.value.trim();
     if (!val) { hint.style.display = 'none'; return; }
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
     hint.style.display = 'block';
-    if (valid) {
-      hint.style.color = '#22c55e';
-      hint.textContent = '✓ Email корректный';
-    } else {
-      hint.style.color = '#ef4444';
-      hint.textContent = '✗ Введите корректный email (example@mail.ru)';
-    }
+    hint.style.color = valid ? '#22c55e' : '#ef4444';
+    hint.textContent = valid ? '✓ Email корректный' : '✗ Введите корректный email (example@mail.ru)';
   }
 
   function validatePasswords() {
@@ -92,13 +66,8 @@
     const p2 = document.getElementById('password2').value;
     if (!p2) { hint.style.display = 'none'; return; }
     hint.style.display = 'block';
-    if (p1 === p2) {
-      hint.style.color = '#22c55e';
-      hint.textContent = '✓ Пароли совпадают';
-    } else {
-      hint.style.color = '#ef4444';
-      hint.textContent = '✗ Пароли не совпадают';
-    }
+    hint.style.color = p1 === p2 ? '#22c55e' : '#ef4444';
+    hint.textContent = p1 === p2 ? '✓ Пароли совпадают' : '✗ Пароли не совпадают';
   }
 
   async function register() {
@@ -109,7 +78,6 @@
     const password2 = document.getElementById('password2').value;
 
     hideError();
-
     if (!full_name) return showError('Введите ФИО');
     if (!email) return showError('Введите email');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError('Введите корректный email');
@@ -118,7 +86,7 @@
     if (password !== password2) return showError('Пароли не совпадают');
 
     btn.disabled = true;
-    btn.textContent = 'Отправляем письмо...';
+    btn.textContent = 'Создаём аккаунт...';
 
     try {
       const res = await fetch('/api/register', {
@@ -129,36 +97,21 @@
       const data = await res.json();
       if (!res.ok) return showError(data.error || 'Ошибка');
 
-      registeredEmail = email;
-      document.getElementById('confirm-email').textContent = email;
-      document.getElementById('form-box').style.display = 'none';
-      document.getElementById('confirm-box').style.display = 'block';
+      const loginRes = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const loginData = await loginRes.json();
+      if (loginData.token) {
+        localStorage.setItem('token', loginData.token);
+        window.location.href = '/cabinet';
+      }
     } catch {
       showError('Ошибка соединения с сервером');
     } finally {
       btn.disabled = false;
       btn.textContent = 'Создать аккаунт';
-    }
-  }
-
-  async function resend() {
-    const btn = document.getElementById('resend-btn');
-    btn.disabled = true;
-    btn.textContent = 'Отправляем...';
-    try {
-      await fetch('/api/resend-verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: registeredEmail })
-      });
-      btn.textContent = 'Письмо отправлено ✓';
-      setTimeout(() => {
-        btn.disabled = false;
-        btn.textContent = 'Отправить повторно';
-      }, 30000);
-    } catch {
-      btn.disabled = false;
-      btn.textContent = 'Ошибка, попробуйте снова';
     }
   }
 
