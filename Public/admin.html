@@ -38,7 +38,7 @@
 <nav>
   <div class="logo">AmaemonVPN</div>
   <div class="nav-links">
-    <a href="cabinet.html">Кабинет</a>
+    <a href="/cabinet">Кабинет</a>
     <button class="btn-outline" onclick="logout()">Выйти</button>
   </div>
 </nav>
@@ -86,7 +86,7 @@
 
 <script>
   const token = localStorage.getItem('token');
-  if (!token) window.location.href = 'login.html';
+  if (!token) window.location.href = '/login';
 
   let usersData = [];
   let tickInterval;
@@ -220,7 +220,7 @@
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-  function logout() { localStorage.removeItem('token'); window.location.href = 'index.html'; }
+  function logout() { localStorage.removeItem('token'); window.location.href = '/'; }
 
   loadUsers();
 </script>

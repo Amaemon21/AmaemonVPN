@@ -11,7 +11,7 @@
 <nav>
   <div class="logo">AmaemonVPN</div>
   <div class="nav-links">
-    <a href="index.html">← На главную</a>
+    <a href="/">← На главную</a>
   </div>
 </nav>
 
@@ -34,14 +34,14 @@
     <button class="btn btn-full" id="btn-login" onclick="login()">Войти</button>
 
     <div class="auth-footer">
-      Нет аккаунта? <a href="register.html">Зарегистрироваться</a>
+      Нет аккаунта? <a href="/register">Зарегистрироваться</a>
     </div>
   </div>
 </div>
 
 <script>
   // Если уже залогинен — редирект
-  if (localStorage.getItem('token')) window.location.href = 'cabinet.html';
+  if (localStorage.getItem('token')) window.location.href = '/cabinet';
 
   async function login() {
     const btn = document.getElementById('btn-login');
@@ -66,7 +66,7 @@
       if (!res.ok) return showError(data.error || 'Ошибка');
 
       localStorage.setItem('token', data.token);
-      window.location.href = 'cabinet.html';
+      window.location.href = '/cabinet';
     } catch {
       showError('Ошибка соединения с сервером');
     } finally {
