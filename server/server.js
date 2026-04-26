@@ -143,21 +143,27 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
 
   // Восстанавливаем peer если подписка была истекшей
-  if (user.subscription_ends < now) {
-    try {
-      const pubKey = fs.readFileSync(
-        `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
-      ).trim();
-      const confLine = fs.readFileSync('/etc/amnezia/amneziawg/awg0.conf', 'utf8')
-        .split('\n').find(l => l.includes(user.client_name));
-      const ip = confLine ? confLine.match(/10\.8\.0\.\d+/)?.[0] : null;
-      if (ip) {
-        execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
-      }
-    } catch(e) {
-      console.error('Restore peer error:', e.message);
+if (user.subscription_ends < now) {
+  try {
+    const pubKey = fs.readFileSync(
+      `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
+    ).trim();
+
+    // Ищем IP из конфига клиента
+    const clientConf = fs.readFileSync(
+      `/etc/amnezia/amneziawg/clients/${user.client_name}/${user.client_name}.conf`, 'utf8'
+    );
+    const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+    const ip = ipMatch ? ipMatch[1] : null;
+
+    if (ip) {
+      execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
+      console.log(`Restored peer ${user.client_name} with IP ${ip}`);
     }
+  } catch(e) {
+    console.error('Restore peer error:', e.message);
   }
+}
 
   res.json({ success: true, subscription_ends: new_ends });
 });
