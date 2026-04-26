@@ -5,26 +5,19 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
+const https = require('https');
+
+require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 
-require('dotenv').config();
-const { YooCheckout } = require('yookassa');
-
-const checkout = new YooCheckout({
-  shopId: process.env.YOOKASSA_SHOP_ID,
-  secretKey: process.env.YOOKASSA_SECRET_KEY
-});
-
 const JWT_SECRET = crypto.randomBytes(64).toString('hex');
 const ADMIN_EMAIL = 'toitol@mail.ru';
-const SUBSCRIPTION_SECONDS = 1 * 60 * 60; // 1 час
+const SUBSCRIPTION_SECONDS = 1 * 60 * 60;
 const DB_PATH = '/var/www/amaemonvpn/server/vpn.db';
 const SCRIPT = '/etc/amnezia/amneziawg/add_client.sh';
 
-// ── База данных ──
 const db = new Database(DB_PATH);
 
 db.exec(`
@@ -60,13 +53,60 @@ function adminOnly(req, res, next) {
   next();
 }
 
+// ── ЮКасса HTTP запросы ──
+function yooRequest(method, path, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const authHeader = Buffer.from(
+      `${process.env.YOOKASSA_SHOP_ID}:${process.env.YOOKASSA_SECRET_KEY}`
+    ).toString('base64');
+    const options = {
+      hostname: 'api.yookassa.ru',
+      path: `/v3/${path}`,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${authHeader}`,
+        'Idempotence-Key': crypto.randomBytes(16).toString('hex'),
+        'Content-Length': Buffer.byteLength(data)
+      }
+    };
+    const req = https.request(options, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => resolve(JSON.parse(d)));
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+// ── Восстановить peer ──
+function restorePeer(user) {
+  try {
+    const pubKey = fs.readFileSync(
+      `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
+    ).trim();
+    const clientConf = fs.readFileSync(
+      `/etc/amnezia/amneziawg/clients/${user.client_name}/${user.client_name}.conf`, 'utf8'
+    );
+    const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+    const ip = ipMatch ? ipMatch[1] : null;
+    if (ip) {
+      execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
+      console.log(`Restored peer ${user.client_name} with IP ${ip}`);
+    }
+  } catch(e) {
+    console.error('Restore peer error:', e.message);
+  }
+}
+
 // ── Регистрация ──
 app.post('/api/register', async (req, res) => {
   const { email, password, full_name, inn } = req.body;
-
   if (!email || !password || !full_name)
     return res.status(400).json({ error: 'Заполните все обязательные поля' });
-
   if (db.prepare('SELECT id FROM users WHERE email = ?').get(email))
     return res.status(400).json({ error: 'Email уже зарегистрирован' });
 
@@ -83,7 +123,6 @@ app.post('/api/register', async (req, res) => {
   }
 
   const config_path = `/etc/amnezia/amneziawg/clients/${client_name}/${client_name}.conf`;
-
   if (!fs.existsSync(config_path))
     return res.status(500).json({ error: 'Конфиг не создан' });
 
@@ -99,12 +138,9 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-
   if (!user) return res.status(401).json({ error: 'Неверный email или пароль' });
-
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Неверный email или пароль' });
-
   const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token });
 });
@@ -123,7 +159,6 @@ app.get('/download/:token', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE download_token = ?').get(req.params.token);
   if (!user) return res.status(404).send('Not found');
   if (!fs.existsSync(user.config_path)) return res.status(404).send('Config not found');
-
   res.setHeader('Content-Disposition', 'attachment; filename="amaemonvpn.conf"');
   res.setHeader('Content-Type', 'text/plain');
   res.sendFile(user.config_path);
@@ -150,55 +185,18 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
 
   db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
 
-  // Восстанавливаем peer если подписка была истекшей
-if (user.subscription_ends < now) {
-  try {
-    const pubKey = fs.readFileSync(
-      `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
-    ).trim();
-
-    // Ищем IP из конфига клиента
-    const clientConf = fs.readFileSync(
-      `/etc/amnezia/amneziawg/clients/${user.client_name}/${user.client_name}.conf`, 'utf8'
-    );
-    const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
-    const ip = ipMatch ? ipMatch[1] : null;
-
-    if (ip) {
-      execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
-      console.log(`Restored peer ${user.client_name} with IP ${ip}`);
-    }
-  } catch(e) {
-    console.error('Restore peer error:', e.message);
-  }
-}
+  if (user.subscription_ends < now) restorePeer(user);
 
   res.json({ success: true, subscription_ends: new_ends });
 });
 
-
-function checkExpired() {
-  const now = Math.floor(Date.now() / 1000);
-  const expired = db.prepare("SELECT client_name FROM users WHERE subscription_ends < ? AND client_name IS NOT NULL").all(now);
-  expired.forEach(u => {
-    try {
-      const pubKey = fs.readFileSync(`/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`, "utf8").trim();
-      execSync(`sudo awg set awg0 peer ${pubKey} remove`);
-    } catch(e) {
-      console.error("Remove peer error:", u.client_name, e.message);
-    }
-  });
-}
-// Проверка каждые 5 минут
-setInterval(checkExpired, 5 * 60 * 1000);
-checkExpired(); // сразу при старте
-
+// ── Создать платёж ──
 app.post('/api/payment/create', auth, async (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   try {
-    const payment = await checkout.createPayment({
+    const payment = await yooRequest('POST', 'payments', {
       amount: { value: '200.00', currency: 'RUB' },
       confirmation: {
         type: 'redirect',
@@ -206,9 +204,8 @@ app.post('/api/payment/create', auth, async (req, res) => {
       },
       capture: true,
       description: `Подписка AmaemonVPN 30 дней — ${user.email}`,
-      metadata: { user_id: user.id }
+      metadata: { user_id: String(user.id) }
     });
-
     res.json({ confirmation_url: payment.confirmation.confirmation_url });
   } catch(e) {
     console.error('Payment error:', e.message);
@@ -217,11 +214,10 @@ app.post('/api/payment/create', auth, async (req, res) => {
 });
 
 // ── Webhook от ЮКассы ──
-app.post('/api/payment/webhook', express.json(), async (req, res) => {
+app.post('/api/payment/webhook', async (req, res) => {
   const { event, object } = req.body;
-
   if (event === 'payment.succeeded') {
-    const userId = object.metadata?.user_id;
+    const userId = parseInt(object.metadata?.user_id);
     if (!userId) return res.sendStatus(200);
 
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
@@ -229,34 +225,36 @@ app.post('/api/payment/webhook', express.json(), async (req, res) => {
 
     const now = Math.floor(Date.now() / 1000);
     const base = Math.max(user.subscription_ends, now);
-    const new_ends = base + 30 * 24 * 3600; // +30 дней
-
+    const new_ends = base + 30 * 24 * 3600;
     db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
 
-    // Восстанавливаем peer если подписка была истекшей
-    if (user.subscription_ends < now) {
-      try {
-        const pubKey = fs.readFileSync(
-          `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
-        ).trim();
-        const clientConf = fs.readFileSync(
-          `/etc/amnezia/amneziawg/clients/${user.client_name}/${user.client_name}.conf`, 'utf8'
-        );
-        const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
-        const ip = ipMatch ? ipMatch[1] : null;
-        if (ip) {
-          execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
-          console.log(`Restored peer ${user.client_name} after payment`);
-        }
-      } catch(e) {
-        console.error('Restore peer error:', e.message);
-      }
-    }
+    if (user.subscription_ends < now) restorePeer(user);
 
-    console.log(`Payment succeeded for user ${user.email}, ends: ${new_ends}`);
+    console.log(`Payment succeeded for ${user.email}, ends: ${new_ends}`);
   }
-
   res.sendStatus(200);
 });
+
+// ── Проверка истекших подписок ──
+function checkExpired() {
+  const now = Math.floor(Date.now() / 1000);
+  const expired = db.prepare(
+    'SELECT client_name FROM users WHERE subscription_ends < ? AND client_name IS NOT NULL'
+  ).all(now);
+  expired.forEach(u => {
+    try {
+      const pubKey = fs.readFileSync(
+        `/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`, 'utf8'
+      ).trim();
+      execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+      console.log(`Removed peer ${u.client_name}`);
+    } catch(e) {
+      console.error('Remove peer error:', u.client_name, e.message);
+    }
+  });
+}
+
+setInterval(checkExpired, 5 * 60 * 1000);
+checkExpired();
 
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
