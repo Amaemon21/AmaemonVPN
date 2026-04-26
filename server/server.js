@@ -144,4 +144,30 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true, subscription_ends: new_ends });
 });
 
+function checkExpired() {
+  const now = Math.floor(Date.now() / 1000);
+  const expired = db.prepare(`
+    SELECT client_name FROM users
+    WHERE subscription_ends < ? AND client_name IS NOT NULL
+  `).all(now);
+
+  expired.forEach(u => {
+    try {
+      execSync(`sudo awg set awg0 peer $(sudo awg show awg0 peers | grep -A1 "# ${u.client_name}" | tail -1) remove 2>/dev/null || true`);
+      // Удаляем peer через публичный ключ
+      const pubKeyPath = `/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`;
+      if (require('fs').existsSync(pubKeyPath)) {
+        const pubKey = require('fs').readFileSync(pubKeyPath, 'utf8').trim();
+        execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+      }
+    } catch(e) {
+      console.error('Remove peer error:', u.client_name, e.message);
+    }
+  });
+}
+
+// Проверка каждые 5 минут
+setInterval(checkExpired, 5 * 60 * 1000);
+checkExpired(); // сразу при старте
+
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
