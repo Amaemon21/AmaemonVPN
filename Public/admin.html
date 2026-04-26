@@ -18,11 +18,10 @@
     td { padding: 0.75rem 0.8rem; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(255,255,255,0.02); }
-    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 100px; font-size: 11px; font-weight: 600; }
-    .badge.active { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .badge.expired { background: rgba(239,68,68,0.15); color: #ef4444; }
     .extend-btn { background: rgba(108,99,255,0.12); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); border-radius: 6px; padding: 0.2rem 0.7rem; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .extend-btn:hover { background: rgba(108,99,255,0.22); }
+    .delete-btn { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; padding: 0.2rem 0.7rem; font-size: 12px; cursor: pointer; white-space: nowrap; margin-left: 0.4rem; }
+    .delete-btn:hover { background: rgba(239,68,68,0.2); }
     .table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; overflow-x: auto; }
     .time-left { font-family: monospace; }
     .time-left.expired { color: var(--red); }
@@ -130,13 +129,13 @@
 
     tbody.innerHTML = usersData.map(u => {
       const active = u.subscription_ends > now;
-      return `<tr>
+      return `<tr id="row-${u.id}">
         <td>${esc(u.full_name)}</td>
         <td style="color:var(--muted)">${esc(u.email)}</td>
         <td style="color:var(--muted)">${formatDate(u.created_at)}</td>
         <td>${formatDateTime(u.subscription_ends)}</td>
         <td><span class="time-left ${active ? 'active' : 'expired'}" id="tl-${u.id}">${timeLeft(u.subscription_ends)}</span></td>
-        <td>
+        <td style="white-space:nowrap">
           <select id="sel-${u.id}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.4rem;font-size:12px;margin-right:0.4rem;">
             <option value="1">+1ч</option>
             <option value="24">+1д</option>
@@ -145,6 +144,7 @@
             <option value="2160">+90д</option>
           </select>
           <button class="extend-btn" onclick="extend(${u.id})">Продлить</button>
+          <button class="delete-btn" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Удалить</button>
         </td>
       </tr>`;
     }).join('');
@@ -182,6 +182,25 @@
         renderStats();
       }
     } catch { alert('Ошибка'); }
+  }
+
+  async function deleteUser(userId, email) {
+    if (!confirm(`Удалить пользователя ${email}?\n\nЭто удалит аккаунт, конфиг и отключит VPN.`)) return;
+
+    try {
+      const res = await fetch('/api/admin/users/' + userId, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.success) {
+        usersData = usersData.filter(u => u.id !== userId);
+        renderTable();
+        renderStats();
+      } else {
+        alert('Ошибка: ' + (data.error || ''));
+      }
+    } catch { alert('Ошибка соединения'); }
   }
 
   function timeLeft(unix) {

@@ -28,7 +28,8 @@
     </div>
     <div class="field">
       <label>Email <span style="color:#ef4444">*</span></label>
-      <input type="email" id="email" placeholder="you@example.com">
+      <input type="email" id="email" placeholder="you@example.com" oninput="validateEmail(this)">
+      <div id="email-hint" style="font-size:12px; margin-top:0.3rem; display:none;"></div>
     </div>
     <div class="field">
       <label>Пароль <span style="color:#ef4444">*</span></label>
@@ -36,7 +37,8 @@
     </div>
     <div class="field">
       <label>Повторите пароль <span style="color:#ef4444">*</span></label>
-      <input type="password" id="password2" placeholder="••••••••">
+      <input type="password" id="password2" placeholder="••••••••" oninput="validatePasswords()">
+      <div id="pass-hint" style="font-size:12px; margin-top:0.3rem; display:none;"></div>
     </div>
 
     <button class="btn btn-full" id="btn-register" onclick="register()">Создать аккаунт</button>
@@ -48,25 +50,54 @@
 </div>
 
 <script>
+  function validateEmail(input) {
+    const hint = document.getElementById('email-hint');
+    const val = input.value.trim();
+    if (!val) { hint.style.display = 'none'; return; }
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    hint.style.display = 'block';
+    if (valid) {
+      hint.style.color = '#22c55e';
+      hint.textContent = '✓ Email корректный';
+    } else {
+      hint.style.color = '#ef4444';
+      hint.textContent = '✗ Введите корректный email (example@mail.ru)';
+    }
+  }
+
+  function validatePasswords() {
+    const hint = document.getElementById('pass-hint');
+    const p1 = document.getElementById('password').value;
+    const p2 = document.getElementById('password2').value;
+    if (!p2) { hint.style.display = 'none'; return; }
+    hint.style.display = 'block';
+    if (p1 === p2) {
+      hint.style.color = '#22c55e';
+      hint.textContent = '✓ Пароли совпадают';
+    } else {
+      hint.style.color = '#ef4444';
+      hint.textContent = '✗ Пароли не совпадают';
+    }
+  }
+
   async function register() {
     const btn = document.getElementById('btn-register');
-    const errEl = document.getElementById('error-msg');
     const full_name = document.getElementById('full_name').value.trim();
     const email = document.getElementById('email').value.trim();
-    const inn = '';
     const password = document.getElementById('password').value;
     const password2 = document.getElementById('password2').value;
 
-    errEl.style.display = 'none';
+    hideError();
 
-    if (!full_name || !email || !password)
-      return showError('Заполните все обязательные поля');
+    if (!full_name) return showError('Введите ФИО');
+    if (!email) return showError('Введите email');
 
-    if (password !== password2)
-      return showError('Пароли не совпадают');
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailValid) return showError('Введите корректный email (example@mail.ru)');
 
-    if (password.length < 6)
-      return showError('Пароль минимум 6 символов');
+    if (!password) return showError('Введите пароль');
+    if (password.length < 6) return showError('Пароль минимум 6 символов');
+    if (password !== password2) return showError('Пароли не совпадают');
 
     btn.disabled = true;
     btn.textContent = 'Создаём аккаунт...';
@@ -75,13 +106,11 @@
       const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name, inn: inn || undefined })
+        body: JSON.stringify({ email, password, full_name })
       });
       const data = await res.json();
-
       if (!res.ok) return showError(data.error || 'Ошибка');
 
-      // Автологин
       const loginRes = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +121,7 @@
         localStorage.setItem('token', loginData.token);
         window.location.href = '/cabinet';
       }
-    } catch (e) {
+    } catch {
       showError('Ошибка соединения с сервером');
     } finally {
       btn.disabled = false;
@@ -106,6 +135,10 @@
     el.style.display = 'block';
     document.getElementById('btn-register').disabled = false;
     document.getElementById('btn-register').textContent = 'Создать аккаунт';
+  }
+
+  function hideError() {
+    document.getElementById('error-msg').style.display = 'none';
   }
 </script>
 
