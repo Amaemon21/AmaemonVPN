@@ -19,20 +19,70 @@
   <div class="auth-box">
     <h2>Добро пожаловать</h2>
     <p>Войдите в личный кабинет</p>
+
+    <div id="error-msg" style="display:none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 0.6rem 0.9rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;"></div>
+
     <div class="field">
       <label>Email</label>
-      <input type="email" placeholder="you@example.com">
+      <input type="email" id="email" placeholder="you@example.com">
     </div>
     <div class="field">
       <label>Пароль</label>
-      <input type="password" placeholder="••••••••">
+      <input type="password" id="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()">
     </div>
-    <a href="cabinet.html" class="btn btn-full" style="display:block; text-align:center; text-decoration:none;">Войти</a>
+
+    <button class="btn btn-full" id="btn-login" onclick="login()">Войти</button>
+
     <div class="auth-footer">
       Нет аккаунта? <a href="register.html">Зарегистрироваться</a>
     </div>
   </div>
 </div>
+
+<script>
+  // Если уже залогинен — редирект
+  if (localStorage.getItem('token')) window.location.href = 'cabinet.html';
+
+  async function login() {
+    const btn = document.getElementById('btn-login');
+    const errEl = document.getElementById('error-msg');
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    errEl.style.display = 'none';
+    if (!email || !password) return showError('Введите email и пароль');
+
+    btn.disabled = true;
+    btn.textContent = 'Входим...';
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) return showError(data.error || 'Ошибка');
+
+      localStorage.setItem('token', data.token);
+      window.location.href = 'cabinet.html';
+    } catch {
+      showError('Ошибка соединения с сервером');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Войти';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('btn-login').disabled = false;
+    document.getElementById('btn-login').textContent = 'Войти';
+  }
+</script>
 
 </body>
 </html>

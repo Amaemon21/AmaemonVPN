@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ — AmaemonVPN</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 2rem 1.2rem; }
+    .admin-header { margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .admin-header h2 { font-size: 1.4rem; font-weight: 700; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem; }
+    .stat-card .num { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; }
+    .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 0.2rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+    td { padding: 0.75rem 0.8rem; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 100px; font-size: 11px; font-weight: 600; }
+    .badge.active { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge.expired { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .extend-btn { background: rgba(108,99,255,0.12); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); border-radius: 6px; padding: 0.2rem 0.7rem; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .extend-btn:hover { background: rgba(108,99,255,0.22); }
+    .table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; overflow-x: auto; }
+    .time-left { font-family: monospace; }
+    .time-left.expired { color: var(--red); }
+    .time-left.active { color: var(--green); }
+    @media (max-width: 600px) {
+      th:nth-child(4), td:nth-child(4),
+      th:nth-child(5), td:nth-child(5) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">AmaemonVPN</div>
+  <div class="nav-links">
+    <a href="cabinet.html">Кабинет</a>
+    <button class="btn-outline" onclick="logout()">Выйти</button>
+  </div>
+</nav>
+
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h2>Панель администратора</h2>
+    <button class="btn" onclick="loadUsers()" style="font-size: 13px; padding: 0.4rem 1rem;">↺ Обновить</button>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="num" id="stat-total">—</div>
+      <div class="lbl">Всего пользователей</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="stat-active" style="color: var(--green)">—</div>
+      <div class="lbl">Активных</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="stat-expired" style="color: var(--red)">—</div>
+      <div class="lbl">Истекших</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ФИО</th>
+          <th>Email</th>
+          <th>ИНН</th>
+          <th>Зарегистрирован</th>
+          <th>Истекает</th>
+          <th>Осталось</th>
+          <th>Действие</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr><td colspan="7" style="text-align:center; color:var(--muted); padding: 2rem;">Загрузка...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('token');
+  if (!token) window.location.href = 'login.html';
+
+  let usersData = [];
+  let tickInterval;
+
+  async function loadUsers() {
+    try {
+      const res = await fetch('/api/admin/users', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (res.status === 401) { logout(); return; }
+      if (res.status === 403) {
+        document.getElementById('users-tbody').innerHTML =
+          '<tr><td colspan="7" style="text-align:center;color:var(--red);padding:2rem;">Нет доступа</td></tr>';
+        return;
+      }
+      usersData = await res.json();
+      renderStats();
+      renderTable();
+      startTick();
+    } catch {
+      document.getElementById('users-tbody').innerHTML =
+        '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Ошибка загрузки</td></tr>';
+    }
+  }
+
+  function renderStats() {
+    const now = Math.floor(Date.now() / 1000);
+    const active = usersData.filter(u => u.subscription_ends > now).length;
+    document.getElementById('stat-total').textContent = usersData.length;
+    document.getElementById('stat-active').textContent = active;
+    document.getElementById('stat-expired').textContent = usersData.length - active;
+  }
+
+  function renderTable() {
+    const now = Math.floor(Date.now() / 1000);
+    const tbody = document.getElementById('users-tbody');
+
+    if (!usersData.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Нет пользователей</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = usersData.map(u => {
+      const active = u.subscription_ends > now;
+      const badge = active
+        ? '<span class="badge active">активна</span>'
+        : '<span class="badge expired">истекла</span>';
+
+      return `<tr>
+        <td>${esc(u.full_name)}</td>
+        <td style="color:var(--muted)">${esc(u.email)}</td>
+        <td style="color:var(--muted); font-family:monospace">${u.inn || '—'}</td>
+        <td style="color:var(--muted)">${formatDate(u.created_at)}</td>
+        <td>${formatDateTime(u.subscription_ends)}</td>
+        <td><span class="time-left ${active ? 'active' : 'expired'}" id="tl-${u.id}">${timeLeft(u.subscription_ends)}</span></td>
+        <td>
+          <select id="sel-${u.id}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.4rem;font-size:12px;margin-right:0.4rem;">
+            <option value="1">+1ч</option>
+            <option value="24">+1д</option>
+            <option value="168">+7д</option>
+            <option value="720" selected>+30д</option>
+            <option value="2160">+90д</option>
+          </select>
+          <button class="extend-btn" onclick="extend(${u.id})">Продлить</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function startTick() {
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = setInterval(() => {
+      usersData.forEach(u => {
+        const el = document.getElementById('tl-' + u.id);
+        if (!el) return;
+        const active = u.subscription_ends > Math.floor(Date.now() / 1000);
+        el.textContent = timeLeft(u.subscription_ends);
+        el.className = 'time-left ' + (active ? 'active' : 'expired');
+      });
+      renderStats();
+    }, 1000);
+  }
+
+  async function extend(userId) {
+    const sel = document.getElementById('sel-' + userId);
+    const hours = parseInt(sel.value);
+    try {
+      const res = await fetch('/api/admin/extend/' + userId, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ hours })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const user = usersData.find(u => u.id === userId);
+        if (user) user.subscription_ends = data.subscription_ends;
+        renderTable();
+        startTick();
+        renderStats();
+      }
+    } catch {
+      alert('Ошибка');
+    }
+  }
+
+  function timeLeft(unix) {
+    const diff = unix * 1000 - Date.now();
+    if (diff <= 0) return 'истекла';
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    if (h >= 24) {
+      const d = Math.floor(h / 24);
+      return `${d}д ${h % 24}ч`;
+    }
+    if (h > 0) return `${h}ч ${pad(m)}м ${pad(s)}с`;
+    return `${pad(m)}м ${pad(s)}с`;
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function formatDate(unix) { return new Date(unix * 1000).toLocaleDateString('ru-RU'); }
+  function formatDateTime(unix) {
+    return new Date(unix * 1000).toLocaleString('ru-RU', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function logout() { localStorage.removeItem('token'); window.location.href = 'index.html'; }
+
+  loadUsers();
+</script>
+
+</body>
+</html>

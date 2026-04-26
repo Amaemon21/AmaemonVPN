@@ -18,25 +18,100 @@
 <div class="auth-wrap">
   <div class="auth-box">
     <h2>Регистрация</h2>
-    <p>Создайте аккаунт и начните пользоваться</p>
+    <p>Создайте аккаунт — конфиг выдаётся сразу</p>
+
+    <div id="error-msg" style="display:none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 0.6rem 0.9rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;"></div>
+
     <div class="field">
-      <label>Email</label>
-      <input type="email" placeholder="you@example.com">
+      <label>ФИО <span style="color:#ef4444">*</span></label>
+      <input type="text" id="full_name" placeholder="Иванов Иван Иванович">
     </div>
     <div class="field">
-      <label>Пароль</label>
-      <input type="password" placeholder="••••••••">
+      <label>Email <span style="color:#ef4444">*</span></label>
+      <input type="email" id="email" placeholder="you@example.com">
     </div>
     <div class="field">
-      <label>Повторите пароль</label>
-      <input type="password" placeholder="••••••••">
+      <label>ИНН самозанятого <span style="color:var(--muted); font-weight:400">(необязательно)</span></label>
+      <input type="text" id="inn" placeholder="123456789012" maxlength="12">
     </div>
-    <a href="cabinet.html" class="btn btn-full" style="display:block; text-align:center; text-decoration:none;">Создать аккаунт</a>
+    <div class="field">
+      <label>Пароль <span style="color:#ef4444">*</span></label>
+      <input type="password" id="password" placeholder="••••••••">
+    </div>
+    <div class="field">
+      <label>Повторите пароль <span style="color:#ef4444">*</span></label>
+      <input type="password" id="password2" placeholder="••••••••">
+    </div>
+
+    <button class="btn btn-full" id="btn-register" onclick="register()">Создать аккаунт</button>
+
     <div class="auth-footer">
       Уже есть аккаунт? <a href="login.html">Войти</a>
     </div>
   </div>
 </div>
+
+<script>
+  async function register() {
+    const btn = document.getElementById('btn-register');
+    const errEl = document.getElementById('error-msg');
+    const full_name = document.getElementById('full_name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const inn = document.getElementById('inn').value.trim();
+    const password = document.getElementById('password').value;
+    const password2 = document.getElementById('password2').value;
+
+    errEl.style.display = 'none';
+
+    if (!full_name || !email || !password)
+      return showError('Заполните все обязательные поля');
+
+    if (password !== password2)
+      return showError('Пароли не совпадают');
+
+    if (password.length < 6)
+      return showError('Пароль минимум 6 символов');
+
+    btn.disabled = true;
+    btn.textContent = 'Создаём аккаунт...';
+
+    try {
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, full_name, inn: inn || undefined })
+      });
+      const data = await res.json();
+
+      if (!res.ok) return showError(data.error || 'Ошибка');
+
+      // Автологин
+      const loginRes = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const loginData = await loginRes.json();
+      if (loginData.token) {
+        localStorage.setItem('token', loginData.token);
+        window.location.href = 'cabinet.html';
+      }
+    } catch (e) {
+      showError('Ошибка соединения с сервером');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Создать аккаунт';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('btn-register').disabled = false;
+    document.getElementById('btn-register').textContent = 'Создать аккаунт';
+  }
+</script>
 
 </body>
 </html>
