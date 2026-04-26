@@ -162,6 +162,19 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true, subscription_ends: new_ends });
 });
 
+
+function checkExpired() {
+  const now = Math.floor(Date.now() / 1000);
+  const expired = db.prepare("SELECT client_name FROM users WHERE subscription_ends < ? AND client_name IS NOT NULL").all(now);
+  expired.forEach(u => {
+    try {
+      const pubKey = fs.readFileSync(`/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`, "utf8").trim();
+      execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+    } catch(e) {
+      console.error("Remove peer error:", u.client_name, e.message);
+    }
+  });
+}
 // Проверка каждые 5 минут
 setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired(); // сразу при старте
