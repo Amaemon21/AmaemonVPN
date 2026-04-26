@@ -41,6 +41,9 @@
       <a id="download-btn" class="btn download-btn" style="display:block; text-align:center; text-decoration:none;">
         Скачать конфиг (.conf)
       </a>
+      <button id="pay-btn" class="btn download-btn" style="background: #22c55e; margin-top: 0.6rem;" onclick="pay()">
+        Оплатить 200 ₽ / 30 дней
+      </button>
       <div style="font-size: 12px; color: var(--muted); margin-top: 0.8rem;">
         Импортируй в приложение <a href="https://amnezia.org" target="_blank" style="color:var(--accent2);">Amnezia</a>
       </div>
@@ -102,6 +105,30 @@
   if (!token) window.location.href = '/login';
 
   let countdownInterval;
+
+  async function pay() {
+  const btn = document.getElementById('pay-btn');
+  btn.disabled = true;
+  btn.textContent = 'Создаём платёж...';
+  try {
+    const res = await fetch('/api/payment/create', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await res.json();
+    if (data.confirmation_url) {
+      window.location.href = data.confirmation_url;
+    } else {
+      alert('Ошибка: ' + (data.error || 'неизвестная ошибка'));
+      btn.disabled = false;
+      btn.textContent = 'Оплатить 200 ₽ / 30 дней';
+    }
+  } catch {
+    alert('Ошибка соединения');
+    btn.disabled = false;
+    btn.textContent = 'Оплатить 200 ₽ / 30 дней';
+  }
+}
 
   async function loadUser() {
     try {
