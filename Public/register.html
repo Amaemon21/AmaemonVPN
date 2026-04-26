@@ -31,10 +31,6 @@
       <input type="email" id="email" placeholder="you@example.com">
     </div>
     <div class="field">
-      <label>ИНН самозанятого <span style="color:var(--muted); font-weight:400">(необязательно)</span></label>
-      <input type="text" id="inn" placeholder="123456789012" maxlength="12">
-    </div>
-    <div class="field">
       <label>Пароль <span style="color:#ef4444">*</span></label>
       <input type="password" id="password" placeholder="••••••••">
     </div>
@@ -57,7 +53,7 @@
     const errEl = document.getElementById('error-msg');
     const full_name = document.getElementById('full_name').value.trim();
     const email = document.getElementById('email').value.trim();
-    const inn = document.getElementById('inn').value.trim();
+    const inn = '';
     const password = document.getElementById('password').value;
     const password2 = document.getElementById('password2').value;
 
