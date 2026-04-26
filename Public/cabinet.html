@@ -124,7 +124,6 @@
     document.getElementById('greeting').textContent = user.full_name;
     document.getElementById('info-name').textContent = user.full_name;
     document.getElementById('info-email').textContent = user.email;
-    document.getElementById('info-inn').textContent = user.inn || 'не указан';
     document.getElementById('info-created').textContent = formatDate(user.created_at);
 
     const endsAt = user.subscription_ends * 1000;
