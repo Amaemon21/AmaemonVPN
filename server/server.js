@@ -193,4 +193,70 @@ function checkExpired() {
 setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired(); // сразу при старте
 
+app.post('/api/payment/create', auth, async (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  try {
+    const payment = await checkout.createPayment({
+      amount: { value: '200.00', currency: 'RUB' },
+      confirmation: {
+        type: 'redirect',
+        return_url: 'https://amaemonvpn.ru/cabinet'
+      },
+      capture: true,
+      description: `Подписка AmaemonVPN 30 дней — ${user.email}`,
+      metadata: { user_id: user.id }
+    });
+
+    res.json({ confirmation_url: payment.confirmation.confirmation_url });
+  } catch(e) {
+    console.error('Payment error:', e.message);
+    res.status(500).json({ error: 'Ошибка создания платежа' });
+  }
+});
+
+// ── Webhook от ЮКассы ──
+app.post('/api/payment/webhook', express.json(), async (req, res) => {
+  const { event, object } = req.body;
+
+  if (event === 'payment.succeeded') {
+    const userId = object.metadata?.user_id;
+    if (!userId) return res.sendStatus(200);
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!user) return res.sendStatus(200);
+
+    const now = Math.floor(Date.now() / 1000);
+    const base = Math.max(user.subscription_ends, now);
+    const new_ends = base + 30 * 24 * 3600; // +30 дней
+
+    db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
+
+    // Восстанавливаем peer если подписка была истекшей
+    if (user.subscription_ends < now) {
+      try {
+        const pubKey = fs.readFileSync(
+          `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
+        ).trim();
+        const clientConf = fs.readFileSync(
+          `/etc/amnezia/amneziawg/clients/${user.client_name}/${user.client_name}.conf`, 'utf8'
+        );
+        const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+        const ip = ipMatch ? ipMatch[1] : null;
+        if (ip) {
+          execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
+          console.log(`Restored peer ${user.client_name} after payment`);
+        }
+      } catch(e) {
+        console.error('Restore peer error:', e.message);
+      }
+    }
+
+    console.log(`Payment succeeded for user ${user.email}, ends: ${new_ends}`);
+  }
+
+  res.sendStatus(200);
+});
+
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
