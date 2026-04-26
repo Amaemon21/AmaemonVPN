@@ -141,30 +141,26 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   const new_ends = base + (hours || 720) * 3600;
 
   db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
-  res.json({ success: true, subscription_ends: new_ends });
-});
 
-function checkExpired() {
-  const now = Math.floor(Date.now() / 1000);
-  const expired = db.prepare(`
-    SELECT client_name FROM users
-    WHERE subscription_ends < ? AND client_name IS NOT NULL
-  `).all(now);
-
-  expired.forEach(u => {
+  // Восстанавливаем peer если подписка была истекшей
+  if (user.subscription_ends < now) {
     try {
-      execSync(`sudo awg set awg0 peer $(sudo awg show awg0 peers | grep -A1 "# ${u.client_name}" | tail -1) remove 2>/dev/null || true`);
-      // Удаляем peer через публичный ключ
-      const pubKeyPath = `/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`;
-      if (require('fs').existsSync(pubKeyPath)) {
-        const pubKey = require('fs').readFileSync(pubKeyPath, 'utf8').trim();
-        execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+      const pubKey = fs.readFileSync(
+        `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
+      ).trim();
+      const confLine = fs.readFileSync('/etc/amnezia/amneziawg/awg0.conf', 'utf8')
+        .split('\n').find(l => l.includes(user.client_name));
+      const ip = confLine ? confLine.match(/10\.8\.0\.\d+/)?.[0] : null;
+      if (ip) {
+        execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
       }
     } catch(e) {
-      console.error('Remove peer error:', u.client_name, e.message);
+      console.error('Restore peer error:', e.message);
     }
-  });
-}
+  }
+
+  res.json({ success: true, subscription_ends: new_ends });
+});
 
 // Проверка каждые 5 минут
 setInterval(checkExpired, 5 * 60 * 1000);
