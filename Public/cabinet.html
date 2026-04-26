@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Личный кабинет — AmaemonVPN</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="logo">AmaemonVPN</div>
+  <div class="nav-links">
+    <a href="index.html">Сайт</a>
+    <span style="color: var(--text); font-size: 14px;">Кабинет</span>
+    <a href="index.html" class="btn-outline" style="display:inline-block; padding: 0.5rem 1.2rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.07); color: var(--text); font-size: 14px; font-weight: 500;">Выйти</a>
+  </div>
+</nav>
+
+<div class="cabinet">
+  <div class="cabinet-header">
+    <h2>Личный кабинет</h2>
+    <p>Подписка активна · 150 ₽/мес · до 15.06.2025</p>
+  </div>
+
+  <div class="cabinet-grid">
+
+    <div class="cabinet-card">
+      <h4>Статус подключения</h4>
+      <div class="status-row">
+        <div class="dot"></div>
+        <span class="status-label">Сервер активен</span>
+        <span class="status-val">31.172.77.46</span>
+      </div>
+      <div class="status-row">
+        <div class="dot"></div>
+        <span class="status-label">AmneziaWG</span>
+        <span class="status-val">порт 443</span>
+      </div>
+      <div class="status-row">
+        <div class="dot off"></div>
+        <span class="status-label">Резервный сервер</span>
+        <span class="status-val">—</span>
+      </div>
+    </div>
+
+    <div class="cabinet-card">
+      <h4>Использовано трафика</h4>
+      <div class="stat-big">34 ГБ</div>
+      <div class="stat-sub">безлимитный тариф</div>
+      <div class="traffic-bar">
+        <div class="traffic-fill"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="cabinet-grid">
+
+    <div class="cabinet-card">
+      <h4>Конфигурация</h4>
+      <div class="config-row">
+        <span class="config-label">Протокол</span>
+        <span class="config-val">AmneziaWG</span>
+      </div>
+      <div class="config-row">
+        <span class="config-label">Endpoint</span>
+        <span class="config-val">31.172.77.46:443</span>
+      </div>
+      <div class="config-row">
+        <span class="config-label">DNS</span>
+        <span class="config-val">1.1.1.1, 1.0.0.1</span>
+      </div>
+      <div class="config-row">
+        <span class="config-label">MTU</span>
+        <span class="config-val">1420</span>
+      </div>
+      <div class="cabinet-actions">
+        <button class="btn" style="font-size: 13px; padding: 0.5rem 1rem;">Скачать .conf</button>
+        <button class="btn-outline" style="font-size: 13px; padding: 0.5rem 1rem;">QR-код</button>
+      </div>
+    </div>
+
+    <div class="cabinet-card">
+      <h4>Устройства</h4>
+      <div class="config-row">
+        <span class="config-label">iPhone 15</span>
+        <button class="btn-copy">активно</button>
+      </div>
+      <div class="config-row">
+        <span class="config-label">MacBook</span>
+        <button class="btn-copy">активно</button>
+      </div>
+      <div class="config-row">
+        <span class="config-label">Слот 3</span>
+        <button class="btn-copy">+ добавить</button>
+      </div>
+      <div class="devices-note">Доступно 3 устройства по тарифу</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
