@@ -257,4 +257,37 @@ function checkExpired() {
 setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired();
 
+// ── Админ: удалить пользователя ──
+app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  // Удаляем peer из WireGuard
+  try {
+    const pubKey = fs.readFileSync(
+      `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
+    ).trim();
+    execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+  } catch(e) {
+    console.error('Remove peer error:', e.message);
+  }
+
+  // Удаляем файлы клиента
+  try {
+    execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${user.client_name}`);
+  } catch(e) {}
+
+  // Удаляем из БД
+  db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+  res.json({ success: true });
+});
+
+// ── Админ: сменить email ──
+app.patch('/api/admin/users/:id/email', auth, adminOnly, (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, req.params.id);
+  res.json({ success: true });
+});
+
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
