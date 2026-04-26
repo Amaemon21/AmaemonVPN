@@ -13,6 +13,13 @@
     .user-info-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 14px; }
     .user-info-row:last-child { border-bottom: none; }
     .user-info-label { color: var(--muted); }
+    .platform-links { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.8rem; }
+    .platform-btn { display: flex; align-items: center; gap: 0.5rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.7rem; text-decoration: none; color: var(--text); font-size: 12px; transition: border-color 0.2s; }
+    .platform-btn:hover { border-color: var(--accent); text-decoration: none; }
+    .platform-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .platform-label { display: flex; flex-direction: column; line-height: 1.2; }
+    .platform-label span:first-child { font-size: 10px; color: var(--muted); }
+    .platform-label span:last-child { font-size: 12px; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -44,9 +51,6 @@
       <button id="pay-btn" class="btn download-btn" style="background: #22c55e; margin-top: 0.6rem;" onclick="pay()">
         Оплатить 200 ₽ / 30 дней
       </button>
-      <div style="font-size: 12px; color: var(--muted); margin-top: 0.8rem;">
-        Импортируй в приложение <a href="https://amnezia.org" target="_blank" style="color:var(--accent2);">Amnezia</a>
-      </div>
     </div>
 
     <div class="cabinet-card">
@@ -89,13 +93,58 @@
 
     <div class="cabinet-card">
       <h4>Инструкция</h4>
-      <ol style="padding-left: 1.2rem; color: var(--muted); font-size: 14px; line-height: 2;">
+      <ol style="padding-left: 1.2rem; color: var(--muted); font-size: 14px; line-height: 2; margin-bottom: 1rem;">
         <li>Скачай конфиг выше</li>
-        <li>Установи <a href="https://amnezia.org" target="_blank" style="color:var(--accent2);">Amnezia VPN</a></li>
+        <li>Установи Amnezia VPN для своей платформы</li>
         <li>Нажми «+» → Из файла</li>
         <li>Выбери скачанный файл</li>
         <li>Подключись</li>
       </ol>
+
+      <div style="font-size: 12px; color: var(--muted); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Скачать Amnezia VPN</div>
+      <div class="platform-links">
+
+        <a class="platform-btn" href="https://apps.apple.com/app/amnezia-vpn/id1600529900" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <div class="platform-label">
+            <span>Скачать в</span>
+            <span>App Store</span>
+          </div>
+        </a>
+
+        <a class="platform-btn" href="https://play.google.com/store/apps/details?id=org.amnezia.vpn" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.25.99.22l.06-.04 11.2-6.47-2.41-2.41-9.84 8.7zm-1.8-20.1C1.14 4 1 4.5 1 5.14v13.72c0 .64.14 1.14.38 1.48l.08.07 7.69-7.69v-.18L1.46 3.6l-.08.06zM20.1 10.3l-2.25-1.3-2.7 2.7 2.7 2.7 2.27-1.31c.65-.37.65-.98 0-1.79zM4.17.24L15.37 6.7l-2.41 2.42L3.12.41l.06-.04c.3-.2.67-.25.99-.13z"/></svg>
+          <div class="platform-label">
+            <span>Скачать в</span>
+            <span>Google Play</span>
+          </div>
+        </a>
+
+        <a class="platform-btn" href="https://github.com/amnezia-vpn/amnezia-client/releases/latest" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l6-1.32v6.57H3zm17 0v-7.5l-8 1.41V12h8zM3 13h6v6.42L3 18V13zm17 0h-8v6.83l8 1.41V13z"/></svg>
+          <div class="platform-label">
+            <span>Скачать для</span>
+            <span>Windows</span>
+          </div>
+        </a>
+
+        <a class="platform-btn" href="https://apps.apple.com/app/amnezia-vpn/id1600529900" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <div class="platform-label">
+            <span>Скачать для</span>
+            <span>macOS</span>
+          </div>
+        </a>
+
+        <a class="platform-btn" href="https://github.com/amnezia-vpn/amnezia-client/releases/latest" target="_blank" style="grid-column: 1 / -1;">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c-.432 0-.7.168-.945.41-.24.243-.432.588-.763.879-.12-.275-.358-.76-.556-1.121-.197-.361-.38-.7-.373-.931-.003-.213.115-.394.281-.597.163-.2.371-.395.481-.654a1.42 1.42 0 00.09-.55c0-.176-.027-.35-.067-.516-.07-.318-.189-.576-.292-.836-.103-.259-.189-.514-.186-.756.003-.275.105-.553.274-.818.168-.265.41-.515.642-.765.234-.25.461-.502.612-.789.153-.289.217-.62.159-.974-.131-.705-.793-1.19-1.428-1.536a6.98 6.98 0 00-.965-.424c-.266-.095-.534-.172-.78-.26-.491-.175-.866-.45-1.08-.97-.162-.386-.172-.887-.083-1.395.089-.506.272-.985.379-1.39.107-.406.141-.77-.027-1.017-.168-.247-.553-.327-1.016-.327z"/></svg>
+          <div class="platform-label">
+            <span>Скачать для</span>
+            <span>Linux</span>
+          </div>
+        </a>
+
+      </div>
     </div>
   </div>
 </div>
@@ -107,28 +156,28 @@
   let countdownInterval;
 
   async function pay() {
-  const btn = document.getElementById('pay-btn');
-  btn.disabled = true;
-  btn.textContent = 'Создаём платёж...';
-  try {
-    const res = await fetch('/api/payment/create', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    const data = await res.json();
-    if (data.confirmation_url) {
-      window.location.href = data.confirmation_url;
-    } else {
-      alert('Ошибка: ' + (data.error || 'неизвестная ошибка'));
+    const btn = document.getElementById('pay-btn');
+    btn.disabled = true;
+    btn.textContent = 'Создаём платёж...';
+    try {
+      const res = await fetch('/api/payment/create', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.confirmation_url) {
+        window.location.href = data.confirmation_url;
+      } else {
+        alert('Ошибка: ' + (data.error || 'неизвестная ошибка'));
+        btn.disabled = false;
+        btn.textContent = 'Оплатить 200 ₽ / 30 дней';
+      }
+    } catch {
+      alert('Ошибка соединения');
       btn.disabled = false;
       btn.textContent = 'Оплатить 200 ₽ / 30 дней';
     }
-  } catch {
-    alert('Ошибка соединения');
-    btn.disabled = false;
-    btn.textContent = 'Оплатить 200 ₽ / 30 дней';
   }
-}
 
   async function loadUser() {
     try {
@@ -150,7 +199,6 @@
     document.getElementById('info-created').textContent = formatDate(user.created_at);
 
     const endsAt = user.subscription_ends * 1000;
-    const endsDate = new Date(endsAt);
     document.getElementById('ends-at').textContent = 'до ' + formatDateTime(user.subscription_ends);
 
     const dlBtn = document.getElementById('download-btn');
@@ -181,13 +229,13 @@
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
 
-if (d > 0) {
-  el.textContent = `${d}д ${h}ч ${pad(m)}м`;
-} else if (h > 0) {
-  el.textContent = `${h}ч ${pad(m)}м ${pad(s)}с`;
-} else {
-  el.textContent = `${pad(m)}м ${pad(s)}с`;
-}
+      if (d > 0) {
+        el.textContent = `${d}д ${h}ч ${pad(m)}м`;
+      } else if (h > 0) {
+        el.textContent = `${h}ч ${pad(m)}м ${pad(s)}с`;
+      } else {
+        el.textContent = `${pad(m)}м ${pad(s)}с`;
+      }
 
       el.className = 'countdown active';
       statusEl.textContent = 'Подписка активна';
