@@ -13,7 +13,7 @@ app.use(express.json());
 const JWT_SECRET = crypto.randomBytes(64).toString('hex');
 const ADMIN_EMAIL = 'toitol@mail.ru';
 const SUBSCRIPTION_SECONDS = 1 * 60 * 60; // 1 час
-const DB_PATH = '/opt/amaemonvpn/vpn.db';
+const DB_PATH = '/var/www/amaemonvpn/server/vpn.db';
 const SCRIPT = '/etc/amnezia/amneziawg/add_client.sh';
 
 // ── База данных ──
