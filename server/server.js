@@ -172,10 +172,23 @@ app.get('/download/:token', (req, res) => {
 // ── Админ: все пользователи ──
 app.get('/api/admin/users', auth, adminOnly, (req, res) => {
   const users = db.prepare(`
-    SELECT id, email, full_name, inn, subscription_ends, created_at
+    SELECT id, email, full_name, inn, subscription_ends, created_at, client_name
     FROM users ORDER BY created_at DESC
   `).all();
-  res.json(users);
+
+  const result = users.map(u => {
+    let vpn_ip = null;
+    try {
+      const conf = fs.readFileSync(
+        `/etc/amnezia/amneziawg/clients/${u.client_name}/${u.client_name}.conf`, 'utf8'
+      );
+      const m = conf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+      if (m) vpn_ip = m[1];
+    } catch {}
+    return { ...u, vpn_ip };
+  });
+
+  res.json(result);
 });
 
 // ── Админ: продлить подписку ──
