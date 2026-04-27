@@ -88,7 +88,10 @@ function adminOnly(req, res, next) {
 // ── Сохранить конфиг WireGuard ──
 function saveWgConfig() {
   try {
-    execSync('sudo awg-quick strip awg0 | sudo tee /etc/amnezia/amneziawg/awg0.conf > /dev/null');
+    const stripped = execSync('sudo awg-quick strip awg0').toString();
+    fs.writeFileSync('/tmp/awg0_tmp.conf', stripped);
+    execSync('sudo tee /etc/amnezia/amneziawg/awg0.conf < /tmp/awg0_tmp.conf > /dev/null');
+    fs.unlinkSync('/tmp/awg0_tmp.conf');
     console.log('WireGuard config saved');
   } catch(e) {
     console.error('Save config error:', e.message);
