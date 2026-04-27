@@ -182,7 +182,8 @@ app.post('/api/register', async (req, res) => {
     return res.status(400).json({ error: 'Email уже зарегистрирован' });
 
   const password_hash = await bcrypt.hash(password, 10);
-  db.prepare('INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)').run(email, password_hash, full_name);
+const free_ends = Math.floor(Date.now() / 1000) + 3 * 60 * 60;
+db.prepare('INSERT INTO users (email, password_hash, full_name, subscription_ends) VALUES (?, ?, ?, ?)').run(email, password_hash, full_name, free_ends);
   res.json({ success: true });
 });
 
