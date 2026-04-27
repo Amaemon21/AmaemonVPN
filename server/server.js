@@ -54,6 +54,16 @@ function adminOnly(req, res, next) {
   next();
 }
 
+// ── Сохранить конфиг WireGuard ──
+function saveWgConfig() {
+  try {
+    execSync('sudo awg-quick strip awg0 | sudo tee /etc/amnezia/amneziawg/awg0.conf > /dev/null');
+    console.log('WireGuard config saved');
+  } catch(e) {
+    console.error('Save config error:', e.message);
+  }
+}
+
 // ── ЮКасса ──
 function yooRequest(method, path, body) {
   return new Promise((resolve, reject) => {
@@ -97,6 +107,7 @@ function restorePeer(user) {
     if (ip) {
       execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
       console.log(`Restored peer ${user.client_name} with IP ${ip}`);
+      saveWgConfig();
     }
   } catch(e) {
     console.error('Restore peer error:', e.message);
@@ -135,6 +146,9 @@ app.post('/api/register', async (req, res) => {
     INSERT INTO users (email, password_hash, full_name, client_name, config_path, download_token, subscription_ends)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(email, password_hash, full_name, client_name, config_path, download_token, subscription_ends);
+
+  // Сохраняем конфиг после добавления нового пира
+  saveWgConfig();
 
   res.json({ success: true });
 });
@@ -217,6 +231,7 @@ app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
       `/etc/amnezia/amneziawg/clients/${user.client_name}/public.key`, 'utf8'
     ).trim();
     execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+    saveWgConfig();
   } catch(e) {}
 
   try {
@@ -267,28 +282,7 @@ app.post('/api/payment/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-// ── Проверка истекших подписок ──
-function checkExpired() {
-  const now = Math.floor(Date.now() / 1000);
-  const expired = db.prepare(
-    'SELECT client_name FROM users WHERE subscription_ends < ? AND client_name IS NOT NULL'
-  ).all(now);
-  expired.forEach(u => {
-    try {
-      const pubKey = fs.readFileSync(
-        `/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`, 'utf8'
-      ).trim();
-      execSync(`sudo awg set awg0 peer ${pubKey} remove`);
-      console.log(`Removed peer ${u.client_name}`);
-    } catch(e) {
-      console.error('Remove peer error:', u.client_name, e.message);
-    }
-  });
-}
-
-setInterval(checkExpired, 5 * 60 * 1000);
-checkExpired();
-
+// ── Статистика WireGuard ──
 app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
   try {
     const output = execSync('sudo awg show awg0 dump').toString();
@@ -310,5 +304,33 @@ app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── Проверка истекших подписок ──
+function checkExpired() {
+  const now = Math.floor(Date.now() / 1000);
+  const expired = db.prepare(
+    'SELECT client_name FROM users WHERE subscription_ends < ? AND client_name IS NOT NULL'
+  ).all(now);
+
+  if (expired.length === 0) return;
+
+  expired.forEach(u => {
+    try {
+      const pubKey = fs.readFileSync(
+        `/etc/amnezia/amneziawg/clients/${u.client_name}/public.key`, 'utf8'
+      ).trim();
+      execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+      console.log(`Removed peer ${u.client_name}`);
+    } catch(e) {
+      console.error('Remove peer error:', u.client_name, e.message);
+    }
+  });
+
+  // Сохраняем конфиг один раз после всех удалений
+  saveWgConfig();
+}
+
+setInterval(checkExpired, 5 * 60 * 1000);
+checkExpired();
 
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
