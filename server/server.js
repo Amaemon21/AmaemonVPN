@@ -87,7 +87,6 @@ function adminOnly(req, res, next) {
 function rebuildWgConfig() {
   try {
     const now = Math.floor(Date.now() / 1000);
-    // Берём только активные устройства (подписка не истекла, не на паузе)
     const activeDevices = db.prepare(`
       SELECT d.client_name, d.config_path FROM devices d
       JOIN users u ON u.id = d.user_id
@@ -104,33 +103,13 @@ function rebuildWgConfig() {
         const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
         if (ipMatch) {
           conf += `\n[Peer]\n# ${d.client_name}\nPublicKey = ${pubKey}\nAllowedIPs = ${ipMatch[1]}/32\n`;
+          execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ipMatch[1]}/32`);
         }
       } catch(e) {}
     });
 
     fs.writeFileSync('/tmp/awg0_new.conf', conf);
     execSync('sudo cp /tmp/awg0_new.conf /etc/amnezia/amneziawg/awg0.conf');
-    execSync('sudo awg set awg0 fwmark 0');
-
-    // Применяем изменения без перезапуска
-    try {
-      execSync('sudo awg syncconf awg0 <(sudo awg-quick strip awg0)', { shell: '/bin/bash' });
-    } catch {}
-
-    // Синхронизируем пиры напрямую
-    activeDevices.forEach(d => {
-      try {
-        const pubKey = fs.readFileSync(
-          `/etc/amnezia/amneziawg/clients/${d.client_name}/public.key`, 'utf8'
-        ).trim();
-        const clientConf = fs.readFileSync(d.config_path, 'utf8');
-        const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
-        if (ipMatch) {
-          execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ipMatch[1]}/32`);
-        }
-      } catch(e) {}
-    });
-
     console.log(`WG config rebuilt: ${activeDevices.length} active peers`);
   } catch(e) {
     console.error('rebuildWgConfig error:', e.message);
