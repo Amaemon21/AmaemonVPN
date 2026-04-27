@@ -20,7 +20,6 @@ const SCRIPT = '/etc/amnezia/amneziawg/add_client.sh';
 const SITE_URL = 'https://amaemonvpn.ru';
 const MAX_DEVICES = 4;
 
-// Цены: индекс = количество устройств (1-4)
 const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
 
 const db = new Database(DB_PATH);
