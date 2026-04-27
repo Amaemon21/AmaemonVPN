@@ -5,12 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Личный кабинет — AmaemonVPN</title>
   <link rel="stylesheet" href="styles.css">
-    <link rel="icon" type="image/png" href="/img/favicon.png">
+  <link rel="icon" type="image/png" href="/img/favicon.png">
   <style>
     .countdown { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
     .countdown.expired { color: var(--red); }
     .countdown.active { color: var(--green); }
-    .download-btn { width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 15px; }
     .user-info-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 14px; }
     .user-info-row:last-child { border-bottom: none; }
     .user-info-label { color: var(--muted); }
@@ -21,6 +20,22 @@
     .platform-label { display: flex; flex-direction: column; line-height: 1.2; }
     .platform-label span:first-child { font-size: 10px; color: var(--muted); }
     .platform-label span:last-child { font-size: 12px; font-weight: 500; }
+
+    /* Devices */
+    .devices-list { margin-top: 0.5rem; }
+    .device-row { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); gap: 0.5rem; }
+    .device-row:last-child { border-bottom: none; }
+    .device-name { font-size: 14px; flex: 1; }
+    .device-actions { display: flex; gap: 0.4rem; }
+    .btn-download { background: rgba(108,99,255,0.12); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); border-radius: 6px; padding: 0.2rem 0.7rem; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-block; }
+    .btn-download:hover { background: rgba(108,99,255,0.22); }
+    .btn-remove-device { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; padding: 0.2rem 0.5rem; font-size: 12px; cursor: pointer; }
+    .btn-remove-device:hover { background: rgba(239,68,68,0.2); }
+    .add-device-form { margin-top: 1rem; display: flex; gap: 0.5rem; }
+    .add-device-form input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.8rem; font-size: 13px; color: var(--text); outline: none; }
+    .add-device-form input:focus { border-color: var(--accent); }
+    .price-tag { font-size: 13px; color: var(--muted); margin-top: 0.5rem; }
+    .price-tag strong { color: var(--text); }
   </style>
 </head>
 <body>
@@ -46,12 +61,10 @@
       <h4>Подписка</h4>
       <div class="countdown active" id="countdown">—</div>
       <div class="stat-sub" id="ends-at"></div>
-      <a id="download-btn" class="btn download-btn" style="display:block; text-align:center; text-decoration:none;">
-        Скачать конфиг (.conf)
-      </a>
-      <button id="pay-btn" class="btn download-btn" style="background: #22c55e; margin-top: 0.6rem;" onclick="pay()">
-        Оплатить 200 ₽ / 30 дней
+      <button id="pay-btn" class="btn" style="width:100%; margin-top: 1rem; padding: 0.75rem; font-size: 15px; background: #22c55e;" onclick="pay()">
+        Оплатить <span id="pay-price">200</span> ₽ / 30 дней
       </button>
+      <div class="price-tag">Цена зависит от количества устройств</div>
     </div>
 
     <div class="cabinet-card">
@@ -73,6 +86,19 @@
   </div>
 
   <div class="cabinet-grid">
+
+    <div class="cabinet-card">
+      <h4>Мои устройства <span id="devices-count" style="color:var(--muted); font-weight:400; font-size:12px;"></span></h4>
+      <div class="devices-list" id="devices-list">Загрузка...</div>
+      <div id="add-device-wrap">
+        <div class="add-device-form">
+          <input type="text" id="device-name-input" placeholder="Название устройства (iPhone, ПК...)" maxlength="30">
+          <button class="btn" style="padding: 0.5rem 1rem; font-size: 13px; white-space:nowrap;" onclick="addDevice()">+ Добавить</button>
+        </div>
+        <div id="device-price-hint" class="price-tag"></div>
+      </div>
+    </div>
+
     <div class="cabinet-card">
       <h4>Статус сервера</h4>
       <div class="status-row">
@@ -92,69 +118,158 @@
       </div>
     </div>
 
+  </div>
+
+  <div class="cabinet-grid">
     <div class="cabinet-card">
       <h4>Инструкция</h4>
       <ol style="padding-left: 1.2rem; color: var(--muted); font-size: 14px; line-height: 2; margin-bottom: 1rem;">
-        <li>Скачай конфиг выше</li>
+        <li>Скачай конфиг нужного устройства</li>
         <li>Установи Amnezia VPN для своей платформы</li>
         <li>Нажми «+» → Из файла</li>
         <li>Выбери скачанный файл</li>
         <li>Подключись</li>
       </ol>
-
       <div style="font-size: 12px; color: var(--muted); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Скачать Amnezia VPN</div>
       <div class="platform-links">
-
         <a class="platform-btn" href="https://apps.apple.com/app/amneziawg/id6478942365" target="_blank">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          <div class="platform-label">
-            <span>Скачать в</span>
-            <span>App Store</span>
-          </div>
+          <div class="platform-label"><span>Скачать в</span><span>App Store</span></div>
         </a>
-
         <a class="platform-btn" href="https://play.google.com/store/apps/details?id=org.amnezia.vpn" target="_blank">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.25.99.22l.06-.04 11.2-6.47-2.41-2.41-9.84 8.7zm-1.8-20.1C1.14 4 1 4.5 1 5.14v13.72c0 .64.14 1.14.38 1.48l.08.07 7.69-7.69v-.18L1.46 3.6l-.08.06zM20.1 10.3l-2.25-1.3-2.7 2.7 2.7 2.7 2.27-1.31c.65-.37.65-.98 0-1.79zM4.17.24L15.37 6.7l-2.41 2.42L3.12.41l.06-.04c.3-.2.67-.25.99-.13z"/></svg>
-          <div class="platform-label">
-            <span>Скачать в</span>
-            <span>Google Play</span>
-          </div>
+          <div class="platform-label"><span>Скачать в</span><span>Google Play</span></div>
         </a>
-
         <a class="platform-btn" href="https://github.com/amnezia-vpn/amnezia-client/releases/latest" target="_blank">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l6-1.32v6.57H3zm17 0v-7.5l-8 1.41V12h8zM3 13h6v6.42L3 18V13zm17 0h-8v6.83l8 1.41V13z"/></svg>
-          <div class="platform-label">
-            <span>Скачать для</span>
-            <span>Windows</span>
-          </div>
+          <div class="platform-label"><span>Скачать для</span><span>Windows</span></div>
         </a>
-
         <a class="platform-btn" href="https://apps.apple.com/app/amneziawg/id6478942365" target="_blank">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          <div class="platform-label">
-            <span>Скачать для</span>
-            <span>macOS</span>
-          </div>
+          <div class="platform-label"><span>Скачать для</span><span>macOS</span></div>
         </a>
-
         <a class="platform-btn" href="https://github.com/amnezia-vpn/amnezia-client/releases/latest" target="_blank" style="grid-column: 1 / -1;">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c-.432 0-.7.168-.945.41-.24.243-.432.588-.763.879-.12-.275-.358-.76-.556-1.121-.197-.361-.38-.7-.373-.931-.003-.213.115-.394.281-.597.163-.2.371-.395.481-.654a1.42 1.42 0 00.09-.55c0-.176-.027-.35-.067-.516-.07-.318-.189-.576-.292-.836-.103-.259-.189-.514-.186-.756.003-.275.105-.553.274-.818.168-.265.41-.515.642-.765.234-.25.461-.502.612-.789.153-.289.217-.62.159-.974-.131-.705-.793-1.19-1.428-1.536a6.98 6.98 0 00-.965-.424c-.266-.095-.534-.172-.78-.26-.491-.175-.866-.45-1.08-.97-.162-.386-.172-.887-.083-1.395.089-.506.272-.985.379-1.39.107-.406.141-.77-.027-1.017-.168-.247-.553-.327-1.016-.327z"/></svg>
-          <div class="platform-label">
-            <span>Скачать для</span>
-            <span>Linux</span>
-          </div>
+          <div class="platform-label"><span>Скачать для</span><span>Linux</span></div>
         </a>
-
       </div>
     </div>
   </div>
 </div>
 
 <script>
+  const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
+  const MAX_DEVICES = 4;
   const token = localStorage.getItem('token');
   if (!token) window.location.href = '/login';
 
+  let currentUser = null;
   let countdownInterval;
+
+  async function loadUser() {
+    try {
+      const res = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (res.status === 401) { logout(); return; }
+      currentUser = await res.json();
+      renderUser(currentUser);
+    } catch {
+      document.getElementById('sub-status').textContent = 'Ошибка загрузки';
+    }
+  }
+
+  function renderUser(user) {
+    document.getElementById('greeting').textContent = user.full_name;
+    document.getElementById('info-name').textContent = user.full_name;
+    document.getElementById('info-email').textContent = user.email;
+    document.getElementById('info-created').textContent = formatDate(user.created_at);
+
+    const endsAt = user.subscription_ends * 1000;
+    document.getElementById('ends-at').textContent = 'до ' + formatDateTime(user.subscription_ends);
+
+    renderDevices(user.devices);
+    updatePrice(user.devices.length);
+    startCountdown(endsAt);
+  }
+
+  function renderDevices(devices) {
+    const list = document.getElementById('devices-list');
+    const count = document.getElementById('devices-count');
+    count.textContent = `${devices.length} / ${MAX_DEVICES}`;
+
+    if (!devices.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;">Нет устройств</div>';
+      return;
+    }
+
+    list.innerHTML = devices.map(d => `
+      <div class="device-row">
+        <span class="device-name">${esc(d.name)}</span>
+        <div class="device-actions">
+          <a class="btn-download" href="/download/${d.download_token}">Скачать конфиг</a>
+          ${devices.length > 1 ? `<button class="btn-remove-device" onclick="removeDevice(${d.id})">✕</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    // Показываем/скрываем форму добавления
+    const addWrap = document.getElementById('add-device-wrap');
+    addWrap.style.display = devices.length >= MAX_DEVICES ? 'none' : 'block';
+  }
+
+  function updatePrice(deviceCount) {
+    const price = PRICES[deviceCount] || 200;
+    document.getElementById('pay-price').textContent = price;
+
+    const hint = document.getElementById('device-price-hint');
+    const nextCount = deviceCount + 1;
+    if (deviceCount < MAX_DEVICES) {
+      const nextPrice = PRICES[nextCount];
+      hint.textContent = `При добавлении устройства цена станет ${nextPrice} ₽/мес`;
+    }
+  }
+
+  async function addDevice() {
+    const input = document.getElementById('device-name-input');
+    const name = input.value.trim();
+    if (!name) { alert('Введите название устройства'); return; }
+
+    const btn = document.querySelector('#add-device-wrap .btn');
+    btn.disabled = true;
+    btn.textContent = 'Создаём...';
+
+    try {
+      const res = await fetch('/api/devices', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Ошибка'); return; }
+
+      input.value = '';
+      await loadUser();
+    } catch {
+      alert('Ошибка соединения');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '+ Добавить';
+    }
+  }
+
+  async function removeDevice(deviceId) {
+    if (!confirm('Удалить устройство? Конфиг перестанет работать.')) return;
+    try {
+      const res = await fetch('/api/devices/' + deviceId, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Ошибка'); return; }
+      await loadUser();
+    } catch {
+      alert('Ошибка соединения');
+    }
+  }
 
   async function pay() {
     const btn = document.getElementById('pay-btn');
@@ -170,99 +285,46 @@
         window.location.href = data.confirmation_url;
       } else {
         alert('Ошибка: ' + (data.error || 'неизвестная ошибка'));
-        btn.disabled = false;
-        btn.textContent = 'Оплатить 200 ₽ / 30 дней';
       }
     } catch {
       alert('Ошибка соединения');
+    } finally {
       btn.disabled = false;
-      btn.textContent = 'Оплатить 200 ₽ / 30 дней';
+      const price = currentUser ? (PRICES[currentUser.devices?.length] || 200) : 200;
+      btn.textContent = `Оплатить ${price} ₽ / 30 дней`;
     }
-  }
-
-  async function loadUser() {
-    try {
-      const res = await fetch('/api/me', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      if (res.status === 401) { logout(); return; }
-      const user = await res.json();
-      renderUser(user);
-    } catch {
-      document.getElementById('sub-status').textContent = 'Ошибка загрузки';
-    }
-  }
-
-  function renderUser(user) {
-    document.getElementById('greeting').textContent = user.full_name;
-    document.getElementById('info-name').textContent = user.full_name;
-    document.getElementById('info-email').textContent = user.email;
-    document.getElementById('info-created').textContent = formatDate(user.created_at);
-
-    const endsAt = user.subscription_ends * 1000;
-    document.getElementById('ends-at').textContent = 'до ' + formatDateTime(user.subscription_ends);
-
-    const dlBtn = document.getElementById('download-btn');
-    dlBtn.href = '/download/' + user.download_token;
-
-    startCountdown(endsAt);
   }
 
   function startCountdown(endsAt) {
     if (countdownInterval) clearInterval(countdownInterval);
-
     function tick() {
-      const now = Date.now();
-      const diff = endsAt - now;
+      const diff = endsAt - Date.now();
       const el = document.getElementById('countdown');
       const statusEl = document.getElementById('sub-status');
-
       if (diff <= 0) {
-        el.textContent = 'Истекла';
-        el.className = 'countdown expired';
+        el.textContent = 'Истекла'; el.className = 'countdown expired';
         statusEl.textContent = 'Подписка истекла';
-        clearInterval(countdownInterval);
-        return;
+        clearInterval(countdownInterval); return;
       }
-
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-
-      if (d > 0) {
-        el.textContent = `${d}д ${h}ч ${pad(m)}м`;
-      } else if (h > 0) {
-        el.textContent = `${h}ч ${pad(m)}м ${pad(s)}с`;
-      } else {
-        el.textContent = `${pad(m)}м ${pad(s)}с`;
-      }
-
+      el.textContent = d > 0 ? `${d}д ${h}ч ${pad(m)}м` : h > 0 ? `${h}ч ${pad(m)}м ${pad(s)}с` : `${pad(m)}м ${pad(s)}с`;
       el.className = 'countdown active';
       statusEl.textContent = 'Подписка активна';
     }
-
     tick();
     countdownInterval = setInterval(tick, 1000);
   }
 
   function pad(n) { return String(n).padStart(2, '0'); }
-
-  function formatDate(unix) {
-    return new Date(unix * 1000).toLocaleDateString('ru-RU');
-  }
-
+  function formatDate(unix) { return new Date(unix * 1000).toLocaleDateString('ru-RU'); }
   function formatDateTime(unix) {
-    return new Date(unix * 1000).toLocaleString('ru-RU', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    return new Date(unix * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
-
-  function logout() {
-    localStorage.removeItem('token');
-    window.location.href = '/';
-  }
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function logout() { localStorage.removeItem('token'); window.location.href = '/'; }
 
   loadUser();
 </script>

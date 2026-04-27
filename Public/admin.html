@@ -17,12 +17,13 @@
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
     td { padding: 0.75rem 0.8rem; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255,255,255,0.02); }
+    .user-row td { border-bottom: none; }
     .extend-btn { background: rgba(108,99,255,0.12); color: var(--accent2); border: 1px solid rgba(108,99,255,0.25); border-radius: 6px; padding: 0.2rem 0.7rem; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .extend-btn:hover { background: rgba(108,99,255,0.22); }
     .delete-btn { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; padding: 0.2rem 0.7rem; font-size: 12px; cursor: pointer; white-space: nowrap; margin-left: 0.4rem; }
     .delete-btn:hover { background: rgba(239,68,68,0.2); }
+    .expand-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0.1rem 0.4rem; border-radius: 4px; transition: color 0.2s; }
+    .expand-btn:hover { color: var(--text); }
     .table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; overflow-x: auto; }
     .time-left { font-family: monospace; }
     .time-left.expired { color: var(--red); }
@@ -31,6 +32,17 @@
     .online-dot.online { background: var(--green); box-shadow: 0 0 4px var(--green); }
     .traffic { font-family: monospace; font-size: 12px; color: var(--muted); }
     .handshake { font-size: 12px; color: var(--muted); }
+
+    /* Devices sub-table */
+    .devices-row { display: none; }
+    .devices-row.open { display: table-row; }
+    .devices-row td { background: var(--bg3); padding: 0 0 0 2rem; border-bottom: 1px solid var(--border); }
+    .devices-subtable { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
+    .devices-subtable td { padding: 0.4rem 0.6rem; font-size: 12px; border: none; color: var(--muted); }
+    .devices-subtable td:first-child { color: var(--text); font-weight: 500; }
+    .device-online { color: var(--green); font-size: 11px; }
+    .device-offline { color: var(--muted); font-size: 11px; }
+
     @media (max-width: 768px) {
       th:nth-child(5), td:nth-child(5),
       th:nth-child(6), td:nth-child(6),
@@ -71,24 +83,29 @@
       <div class="num" id="stat-online" style="color: #22c55e">—</div>
       <div class="lbl">Онлайн сейчас</div>
     </div>
+    <div class="stat-card">
+      <div class="num" id="stat-devices">—</div>
+      <div class="lbl">Всего устройств</div>
+    </div>
   </div>
 
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
+          <th></th>
           <th>ФИО</th>
           <th>Email</th>
+          <th>Устр.</th>
           <th>Зарегистрирован</th>
           <th>Истекает</th>
           <th>Осталось</th>
-          <th>Трафик ↓↑</th>
-          <th>Последний вход</th>
+          <th>Онлайн</th>
           <th>Действие</th>
         </tr>
       </thead>
       <tbody id="users-tbody">
-        <tr><td colspan="8" style="text-align:center; color:var(--muted); padding: 2rem;">Загрузка...</td></tr>
+        <tr><td colspan="9" style="text-align:center; color:var(--muted); padding: 2rem;">Загрузка...</td></tr>
       </tbody>
     </table>
   </div>
@@ -111,53 +128,44 @@
 
   async function loadUsers() {
     try {
-      const res = await fetch('/api/admin/users', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await fetch('/api/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
       if (res.status === 401) { logout(); return; }
       if (res.status === 403) {
         document.getElementById('users-tbody').innerHTML =
-          '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:2rem;">Нет доступа</td></tr>';
+          '<tr><td colspan="9" style="text-align:center;color:var(--red);padding:2rem;">Нет доступа</td></tr>';
         return;
       }
       usersData = await res.json();
     } catch {
       document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Ошибка загрузки</td></tr>';
+        '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">Ошибка загрузки</td></tr>';
     }
   }
 
   async function loadStats() {
     try {
-      const res = await fetch('/api/admin/stats', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await fetch('/api/admin/stats', { headers: { 'Authorization': 'Bearer ' + token } });
       if (res.ok) statsData = await res.json();
     } catch {}
   }
 
-  function getPeerStats(clientName) {
-    // Ищем пир по client_name через public key файл — матчим по allowedIps
-    // statsData keyed by pubkey, мы матчим по IP из allowedIps
-    return null; // заглушка, матчинг ниже через users
+  function findPeerByIp(ip) {
+    return Object.values(statsData).find(p => p.allowedIps === ip + '/32') || null;
   }
 
   function renderStats() {
     const now = Math.floor(Date.now() / 1000);
     const active = usersData.filter(u => u.subscription_ends > now).length;
-    document.getElementById('stat-total').textContent = usersData.length;
-    document.getElementById('stat-active').textContent = active;
-    document.getElementById('stat-expired').textContent = usersData.length - active;
-
-    // Онлайн = handshake < 3 минуты назад
+    const totalDevices = usersData.reduce((s, u) => s + (u.devices?.length || 0), 0);
     const onlineCount = Object.values(statsData).filter(p =>
       p.latestHandshake && (now - p.latestHandshake) < 180
     ).length;
-    document.getElementById('stat-online').textContent = onlineCount;
-  }
 
-  function findPeerByIp(ip) {
-    return Object.values(statsData).find(p => p.allowedIps === ip + '/32') || null;
+    document.getElementById('stat-total').textContent = usersData.length;
+    document.getElementById('stat-active').textContent = active;
+    document.getElementById('stat-expired').textContent = usersData.length - active;
+    document.getElementById('stat-online').textContent = onlineCount;
+    document.getElementById('stat-devices').textContent = totalDevices;
   }
 
   function renderTable() {
@@ -165,47 +173,97 @@
     const tbody = document.getElementById('users-tbody');
 
     if (!usersData.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Нет пользователей</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">Нет пользователей</td></tr>';
       return;
     }
 
     tbody.innerHTML = usersData.map(u => {
       const active = u.subscription_ends > now;
-      const peer = u.vpn_ip ? findPeerByIp(u.vpn_ip) : null;
-      const isOnline = peer && peer.latestHandshake && (now - peer.latestHandshake) < 180;
+      const devices = u.devices || [];
 
-      const traffic = peer
-        ? `<span class="traffic">↓${fmtBytes(peer.rxBytes)} ↑${fmtBytes(peer.txBytes)}</span>`
-        : '<span class="traffic" style="color:var(--muted)">—</span>';
+      // Проверяем онлайн по устройствам
+      const onlineDevices = devices.filter(d => {
+        const peer = d.vpn_ip ? findPeerByIp(d.vpn_ip) : null;
+        return peer && peer.latestHandshake && (now - peer.latestHandshake) < 180;
+      });
+      const isOnline = onlineDevices.length > 0;
 
-      const handshake = peer && peer.latestHandshake
-        ? `<span class="handshake">${timeAgo(peer.latestHandshake)}</span>`
-        : '<span class="handshake">—</span>';
+      // Суммарный трафик
+      let totalRx = 0, totalTx = 0;
+      devices.forEach(d => {
+        const peer = d.vpn_ip ? findPeerByIp(d.vpn_ip) : null;
+        if (peer) { totalRx += peer.rxBytes; totalTx += peer.txBytes; }
+      });
 
-      return `<tr id="row-${u.id}">
-        <td>
-          <span class="online-dot ${isOnline ? 'online' : ''}"></span>
-          ${esc(u.full_name)}
-        </td>
-        <td style="color:var(--muted)">${esc(u.email)}</td>
-        <td style="color:var(--muted)">${formatDate(u.created_at)}</td>
-        <td>${formatDateTime(u.subscription_ends)}</td>
-        <td><span class="time-left ${active ? 'active' : 'expired'}" id="tl-${u.id}">${timeLeft(u.subscription_ends)}</span></td>
-        <td>${traffic}</td>
-        <td>${handshake}</td>
-        <td style="white-space:nowrap">
-          <select id="sel-${u.id}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.4rem;font-size:12px;margin-right:0.4rem;">
-            <option value="1">+1ч</option>
-            <option value="24">+1д</option>
-            <option value="168">+7д</option>
-            <option value="720" selected>+30д</option>
-            <option value="2160">+90д</option>
-          </select>
-          <button class="extend-btn" onclick="extend(${u.id})">Продлить</button>
-          <button class="delete-btn" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Удалить</button>
-        </td>
-      </tr>`;
+      // Devices subtable
+      const devicesHtml = devices.map(d => {
+        const peer = d.vpn_ip ? findPeerByIp(d.vpn_ip) : null;
+        const online = peer && peer.latestHandshake && (now - peer.latestHandshake) < 180;
+        const handshake = peer && peer.latestHandshake ? timeAgo(peer.latestHandshake) : '—';
+        const traffic = peer ? `↓${fmtBytes(peer.rxBytes)} ↑${fmtBytes(peer.txBytes)}` : '—';
+        const ip = d.vpn_ip || '—';
+        return `<tr>
+          <td>${esc(d.name)}</td>
+          <td class="${online ? 'device-online' : 'device-offline'}">${online ? '● онлайн' : '○ офлайн'}</td>
+          <td>${ip}</td>
+          <td>${traffic}</td>
+          <td>${handshake}</td>
+        </tr>`;
+      }).join('');
+
+      return `
+        <tr class="user-row" id="user-row-${u.id}">
+          <td>
+            <button class="expand-btn" onclick="toggleDevices(${u.id})" id="expand-${u.id}">▶</button>
+          </td>
+          <td>
+            <span class="online-dot ${isOnline ? 'online' : ''}"></span>
+            ${esc(u.full_name)}
+          </td>
+          <td style="color:var(--muted)">${esc(u.email)}</td>
+          <td style="text-align:center">${devices.length}</td>
+          <td style="color:var(--muted)">${formatDate(u.created_at)}</td>
+          <td>${formatDateTime(u.subscription_ends)}</td>
+          <td><span class="time-left ${active ? 'active' : 'expired'}" id="tl-${u.id}">${timeLeft(u.subscription_ends)}</span></td>
+          <td>${totalRx + totalTx > 0 ? `<span class="traffic">↓${fmtBytes(totalRx)} ↑${fmtBytes(totalTx)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+          <td style="white-space:nowrap">
+            <select id="sel-${u.id}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.4rem;font-size:12px;margin-right:0.4rem;">
+              <option value="1">+1ч</option>
+              <option value="24">+1д</option>
+              <option value="168">+7д</option>
+              <option value="720" selected>+30д</option>
+              <option value="2160">+90д</option>
+            </select>
+            <button class="extend-btn" onclick="extend(${u.id})">Продлить</button>
+            <button class="delete-btn" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Удалить</button>
+          </td>
+        </tr>
+        <tr class="devices-row" id="devices-row-${u.id}">
+          <td colspan="9">
+            <table class="devices-subtable">
+              <thead>
+                <tr>
+                  <td><strong>Устройство</strong></td>
+                  <td><strong>Статус</strong></td>
+                  <td><strong>IP</strong></td>
+                  <td><strong>Трафик</strong></td>
+                  <td><strong>Последний вход</strong></td>
+                </tr>
+              </thead>
+              <tbody>${devicesHtml || '<tr><td colspan="5" style="color:var(--muted)">Нет устройств</td></tr>'}</tbody>
+            </table>
+          </td>
+        </tr>
+      `;
     }).join('');
+  }
+
+  function toggleDevices(userId) {
+    const row = document.getElementById('devices-row-' + userId);
+    const btn = document.getElementById('expand-' + userId);
+    const isOpen = row.classList.contains('open');
+    row.classList.toggle('open', !isOpen);
+    btn.textContent = isOpen ? '▶' : '▼';
   }
 
   function startTick() {
@@ -221,7 +279,6 @@
       renderStats();
     }, 1000);
 
-    // Обновляем статистику каждые 30 секунд
     setInterval(async () => {
       await loadStats();
       renderTable();
@@ -241,15 +298,13 @@
       if (data.success) {
         const user = usersData.find(u => u.id === userId);
         if (user) user.subscription_ends = data.subscription_ends;
-        renderTable();
-        startTick();
-        renderStats();
+        renderTable(); startTick(); renderStats();
       }
     } catch { alert('Ошибка'); }
   }
 
   async function deleteUser(userId, email) {
-    if (!confirm(`Удалить пользователя ${email}?\n\nЭто удалит аккаунт, конфиг и отключит VPN.`)) return;
+    if (!confirm(`Удалить пользователя ${email}?\n\nЭто удалит аккаунт, все устройства и отключит VPN.`)) return;
     try {
       const res = await fetch('/api/admin/users/' + userId, {
         method: 'DELETE',
@@ -258,8 +313,7 @@
       const data = await res.json();
       if (data.success) {
         usersData = usersData.filter(u => u.id !== userId);
-        renderTable();
-        renderStats();
+        renderTable(); renderStats();
       } else {
         alert('Ошибка: ' + (data.error || ''));
       }
@@ -296,10 +350,7 @@
   function pad(n) { return String(n).padStart(2, '0'); }
   function formatDate(unix) { return new Date(unix * 1000).toLocaleDateString('ru-RU'); }
   function formatDateTime(unix) {
-    return new Date(unix * 1000).toLocaleString('ru-RU', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    return new Date(unix * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function logout() { localStorage.removeItem('token'); window.location.href = '/'; }
