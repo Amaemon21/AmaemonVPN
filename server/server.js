@@ -3,7 +3,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 
@@ -19,9 +19,27 @@ const DB_PATH = '/var/www/amaemonvpn/server/vpn.db';
 const SCRIPT = '/etc/amnezia/amneziawg/add_client.sh';
 const SITE_URL = 'https://amaemonvpn.ru';
 const MAX_DEVICES = 4;
-
 const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
+const WG_INTERFACE_CONF = '/etc/amnezia/amneziawg/awg0.conf';
+const WG_INTERFACE_HEADER = `[Interface]
+Address = 10.8.0.1/24
+ListenPort = 443
+PrivateKey = +JIndR7C04ybl5QY8s+KTKld8WeJA0CCSMF4DvCQpHU=
+Jc = 4
+Jmin = 40
+Jmax = 70
+S1 = 50
+S2 = 100
+H1 = 1836923987
+H2 = 1836923988
+H3 = 1836923989
+H4 = 1836923990
 
+PostUp   = iptables -A FORWARD -i awg0 -j ACCEPT; iptables -A FORWARD -o awg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -D FORWARD -i awg0 -j ACCEPT; iptables -D FORWARD -o awg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+`;
+
+// ── База данных ──
 const db = new Database(DB_PATH);
 
 db.exec(`
@@ -30,41 +48,22 @@ db.exec(`
     email             TEXT UNIQUE NOT NULL,
     password_hash     TEXT NOT NULL,
     full_name         TEXT NOT NULL,
-    inn               TEXT,
-    client_name       TEXT UNIQUE,
-    config_path       TEXT,
-    download_token    TEXT UNIQUE,
-    subscription_ends INTEGER,
+    subscription_ends INTEGER DEFAULT 0,
     created_at        INTEGER DEFAULT (unixepoch())
   );
 
   CREATE TABLE IF NOT EXISTS devices (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id        INTEGER NOT NULL,
-    name           TEXT NOT NULL DEFAULT 'Устройство',
+    name           TEXT NOT NULL,
     client_name    TEXT UNIQUE NOT NULL,
     config_path    TEXT NOT NULL,
     download_token TEXT UNIQUE NOT NULL,
+    paused         INTEGER DEFAULT 0,
     created_at     INTEGER DEFAULT (unixepoch()),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
-
-// Миграция: переносим существующие устройства из users в devices
-try {
-  const usersWithDevices = db.prepare(
-    'SELECT id, client_name, config_path, download_token FROM users WHERE client_name IS NOT NULL'
-  ).all();
-  const insertDevice = db.prepare(
-    'INSERT OR IGNORE INTO devices (user_id, name, client_name, config_path, download_token) VALUES (?, ?, ?, ?, ?)'
-  );
-  usersWithDevices.forEach(u => {
-    insertDevice.run(u.id, 'Устройство 1', u.client_name, u.config_path, u.download_token);
-  });
-  if (usersWithDevices.length > 0) console.log(`Migrated ${usersWithDevices.length} devices`);
-} catch(e) {
-  console.error('Migration error:', e.message);
-}
 
 // ── Middleware ──
 function auth(req, res, next) {
@@ -84,61 +83,84 @@ function adminOnly(req, res, next) {
   next();
 }
 
-// ── Сохранить конфиг WireGuard ──
-function saveWgConfig() {
+// ── WireGuard: сохранить конфиг из БД ──
+function rebuildWgConfig() {
   try {
-    const stripped = execSync('sudo awg-quick strip awg0').toString();
-    fs.writeFileSync('/tmp/awg0_tmp.conf', stripped);
-    execSync('sudo tee /etc/amnezia/amneziawg/awg0.conf < /tmp/awg0_tmp.conf > /dev/null');
-    fs.unlinkSync('/tmp/awg0_tmp.conf');
-    console.log('WireGuard config saved');
+    const now = Math.floor(Date.now() / 1000);
+    // Берём только активные устройства (подписка не истекла, не на паузе)
+    const activeDevices = db.prepare(`
+      SELECT d.client_name, d.config_path FROM devices d
+      JOIN users u ON u.id = d.user_id
+      WHERE u.subscription_ends > ? AND d.paused = 0
+    `).all(now);
+
+    let conf = WG_INTERFACE_HEADER;
+    activeDevices.forEach(d => {
+      try {
+        const pubKey = fs.readFileSync(
+          `/etc/amnezia/amneziawg/clients/${d.client_name}/public.key`, 'utf8'
+        ).trim();
+        const clientConf = fs.readFileSync(d.config_path, 'utf8');
+        const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+        if (ipMatch) {
+          conf += `\n[Peer]\n# ${d.client_name}\nPublicKey = ${pubKey}\nAllowedIPs = ${ipMatch[1]}/32\n`;
+        }
+      } catch(e) {}
+    });
+
+    fs.writeFileSync('/tmp/awg0_new.conf', conf);
+    execSync('sudo cp /tmp/awg0_new.conf /etc/amnezia/amneziawg/awg0.conf');
+    execSync('sudo awg set awg0 fwmark 0');
+
+    // Применяем изменения без перезапуска
+    try {
+      execSync('sudo awg syncconf awg0 <(sudo awg-quick strip awg0)', { shell: '/bin/bash' });
+    } catch {}
+
+    // Синхронизируем пиры напрямую
+    activeDevices.forEach(d => {
+      try {
+        const pubKey = fs.readFileSync(
+          `/etc/amnezia/amneziawg/clients/${d.client_name}/public.key`, 'utf8'
+        ).trim();
+        const clientConf = fs.readFileSync(d.config_path, 'utf8');
+        const ipMatch = clientConf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+        if (ipMatch) {
+          execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ipMatch[1]}/32`);
+        }
+      } catch(e) {}
+    });
+
+    console.log(`WG config rebuilt: ${activeDevices.length} active peers`);
   } catch(e) {
-    console.error('Save config error:', e.message);
+    console.error('rebuildWgConfig error:', e.message);
   }
 }
 
-// ── Создать VPN конфиг для устройства ──
-function createVpnConfig(clientName) {
-  execSync(`sudo ${SCRIPT} ${clientName}`, { timeout: 15000 });
-  const configPath = `/etc/amnezia/amneziawg/clients/${clientName}/${clientName}.conf`;
-  if (!fs.existsSync(configPath)) throw new Error('Конфиг не создан');
-  saveWgConfig();
-  return configPath;
+// ── WireGuard: добавить пир ──
+function addPeer(clientName, configPath) {
+  try {
+    const pubKey = fs.readFileSync(
+      `/etc/amnezia/amneziawg/clients/${clientName}/public.key`, 'utf8'
+    ).trim();
+    const conf = fs.readFileSync(configPath, 'utf8');
+    const ipMatch = conf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
+    if (ipMatch) {
+      execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ipMatch[1]}/32`);
+    }
+  } catch(e) {
+    console.error('addPeer error:', e.message);
+  }
 }
 
-// ── Удалить VPN конфиг устройства ──
-function removeVpnConfig(clientName) {
+// ── WireGuard: удалить пир (пауза) ──
+function removePeer(clientName) {
   try {
     const pubKey = fs.readFileSync(
       `/etc/amnezia/amneziawg/clients/${clientName}/public.key`, 'utf8'
     ).trim();
     execSync(`sudo awg set awg0 peer ${pubKey} remove`);
   } catch(e) {}
-  try {
-    execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${clientName}`);
-  } catch(e) {}
-}
-
-// ── Восстановить все пиры пользователя ──
-function restoreUserPeers(userId) {
-  const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
-  devices.forEach(d => {
-    try {
-      const pubKey = fs.readFileSync(
-        `/etc/amnezia/amneziawg/clients/${d.client_name}/public.key`, 'utf8'
-      ).trim();
-      const conf = fs.readFileSync(d.config_path, 'utf8');
-      const ipMatch = conf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
-      const ip = ipMatch ? ipMatch[1] : null;
-      if (ip) {
-        execSync(`sudo awg set awg0 peer ${pubKey} allowed-ips ${ip}/32`);
-        console.log(`Restored peer ${d.client_name} with IP ${ip}`);
-      }
-    } catch(e) {
-      console.error('Restore peer error:', d.client_name, e.message);
-    }
-  });
-  saveWgConfig();
 }
 
 // ── ЮКасса ──
@@ -174,35 +196,14 @@ function yooRequest(method, path, body) {
 app.post('/api/register', async (req, res) => {
   const { email, password, full_name } = req.body;
   if (!email || !password || !full_name)
-    return res.status(400).json({ error: 'Заполните все обязательные поля' });
+    return res.status(400).json({ error: 'Заполните все поля' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: 'Некорректный email' });
   if (db.prepare('SELECT id FROM users WHERE email = ?').get(email))
     return res.status(400).json({ error: 'Email уже зарегистрирован' });
 
   const password_hash = await bcrypt.hash(password, 10);
-  const subscription_ends = Math.floor(Date.now() / 1000) + SUBSCRIPTION_SECONDS;
-  const client_name = 'u' + Date.now();
-  const download_token = crypto.randomBytes(32).toString('hex');
-
-  let config_path;
-  try {
-    config_path = createVpnConfig(client_name);
-  } catch(e) {
-    console.error('Script error:', e.message);
-    return res.status(500).json({ error: 'Ошибка создания конфига VPN' });
-  }
-
-  const user = db.prepare(`
-    INSERT INTO users (email, password_hash, full_name, client_name, config_path, download_token, subscription_ends)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(email, password_hash, full_name, client_name, config_path, download_token, subscription_ends);
-
-  db.prepare(`
-    INSERT INTO devices (user_id, name, client_name, config_path, download_token)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(user.lastInsertRowid, 'Устройство 1', client_name, config_path, download_token);
-
+  db.prepare('INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)').run(email, password_hash, full_name);
   res.json({ success: true });
 });
 
@@ -219,20 +220,16 @@ app.post('/api/login', async (req, res) => {
 
 // ── Профиль ──
 app.get('/api/me', auth, (req, res) => {
-  const user = db.prepare(`
-    SELECT id, email, full_name, inn, subscription_ends, created_at
-    FROM users WHERE id = ?
-  `).get(req.user.id);
-  const devices = db.prepare('SELECT id, name, download_token, created_at FROM devices WHERE user_id = ?').all(req.user.id);
-  const deviceCount = devices.length;
-  const price = PRICES[deviceCount] || 200;
-  res.json({ ...user, devices, device_count: deviceCount, price });
+  const user = db.prepare('SELECT id, email, full_name, subscription_ends, created_at FROM users WHERE id = ?').get(req.user.id);
+  const devices = db.prepare('SELECT id, name, download_token, paused, created_at FROM devices WHERE user_id = ?').all(req.user.id);
+  const price = PRICES[devices.length] || PRICES[1];
+  res.json({ ...user, devices, device_count: devices.length, price });
 });
 
 // ── Устройства: добавить ──
 app.post('/api/devices', auth, async (req, res) => {
   const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Введите название устройства' });
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Введите название устройства' });
 
   const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
   if (deviceCount >= MAX_DEVICES)
@@ -241,23 +238,34 @@ app.post('/api/devices', auth, async (req, res) => {
   const client_name = 'u' + Date.now();
   const download_token = crypto.randomBytes(32).toString('hex');
 
-  let config_path;
   try {
-    config_path = createVpnConfig(client_name);
+    execSync(`sudo ${SCRIPT} ${client_name}`, { timeout: 15000 });
   } catch(e) {
     console.error('Script error:', e.message);
     return res.status(500).json({ error: 'Ошибка создания конфига VPN' });
   }
 
+  const config_path = `/etc/amnezia/amneziawg/clients/${client_name}/${client_name}.conf`;
+  if (!fs.existsSync(config_path))
+    return res.status(500).json({ error: 'Конфиг не создан' });
+
+  const user = db.prepare('SELECT subscription_ends FROM users WHERE id = ?').get(req.user.id);
+  const now = Math.floor(Date.now() / 1000);
+  const isActive = user.subscription_ends > now;
+  const paused = isActive ? 0 : 1;
+
   const device = db.prepare(`
-    INSERT INTO devices (user_id, name, client_name, config_path, download_token)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(req.user.id, name, client_name, config_path, download_token);
+    INSERT INTO devices (user_id, name, client_name, config_path, download_token, paused)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(req.user.id, name.trim(), client_name, config_path, download_token, paused);
+
+  // Добавляем пир если подписка активна
+  if (isActive) addPeer(client_name, config_path);
 
   const newCount = deviceCount + 1;
   res.json({
     success: true,
-    device: { id: device.lastInsertRowid, name, download_token },
+    device: { id: device.lastInsertRowid, name: name.trim(), download_token, paused },
     device_count: newCount,
     price: PRICES[newCount] || 650
   });
@@ -268,14 +276,11 @@ app.delete('/api/devices/:id', auth, (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!device) return res.status(404).json({ error: 'Устройство не найдено' });
 
-  const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
-  if (deviceCount <= 1) return res.status(400).json({ error: 'Нельзя удалить последнее устройство' });
-
-  removeVpnConfig(device.client_name);
+  removePeer(device.client_name);
+  try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
   db.prepare('DELETE FROM devices WHERE id = ?').run(device.id);
-  saveWgConfig();
 
-  const newCount = deviceCount - 1;
+  const newCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
   res.json({ success: true, device_count: newCount, price: PRICES[newCount] || 200 });
 });
 
@@ -284,7 +289,7 @@ app.get('/download/:token', (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE download_token = ?').get(req.params.token);
   if (!device) return res.status(404).send('Not found');
   if (!fs.existsSync(device.config_path)) return res.status(404).send('Config not found');
-  const safeName = device.name.replace(/[^a-zA-Z0-9а-яА-Я]/g, '_');
+  const safeName = device.name.replace(/[^a-zA-Z0-9]/g, '_');
   res.setHeader('Content-Disposition', `attachment; filename="amaemonvpn_${safeName}.conf"`);
   res.setHeader('Content-Type', 'text/plain');
   res.sendFile(device.config_path);
@@ -292,13 +297,9 @@ app.get('/download/:token', (req, res) => {
 
 // ── Админ: все пользователи ──
 app.get('/api/admin/users', auth, adminOnly, (req, res) => {
-  const users = db.prepare(`
-    SELECT id, email, full_name, inn, subscription_ends, created_at
-    FROM users ORDER BY created_at DESC
-  `).all();
-
+  const users = db.prepare('SELECT id, email, full_name, subscription_ends, created_at FROM users ORDER BY created_at DESC').all();
   const result = users.map(u => {
-    const devices = db.prepare('SELECT id, name, client_name, config_path, download_token, created_at FROM devices WHERE user_id = ?').all(u.id);
+    const devices = db.prepare('SELECT id, name, client_name, config_path, download_token, paused, created_at FROM devices WHERE user_id = ?').all(u.id);
     const devicesWithIp = devices.map(d => {
       let vpn_ip = null;
       try {
@@ -310,7 +311,6 @@ app.get('/api/admin/users', auth, adminOnly, (req, res) => {
     });
     return { ...u, devices: devicesWithIp };
   });
-
   res.json(result);
 });
 
@@ -321,11 +321,19 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const now = Math.floor(Date.now() / 1000);
+  const wasExpired = user.subscription_ends < now;
   const base = Math.max(user.subscription_ends || now, now);
   const new_ends = base + (hours || 720) * 3600;
 
   db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
-  if (user.subscription_ends < now) restoreUserPeers(user.id);
+
+  // Снимаем паузу с устройств
+  if (wasExpired) {
+    db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(user.id);
+    const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
+    devices.forEach(d => addPeer(d.client_name, d.config_path));
+    console.log(`Restored ${devices.length} peers for user ${user.email}`);
+  }
 
   res.json({ success: true, subscription_ends: new_ends });
 });
@@ -336,12 +344,13 @@ app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
-  devices.forEach(d => removeVpnConfig(d.client_name));
+  devices.forEach(d => {
+    removePeer(d.client_name);
+    try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${d.client_name}`); } catch {}
+  });
 
   db.prepare('DELETE FROM devices WHERE user_id = ?').run(user.id);
   db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
-  saveWgConfig();
-
   res.json({ success: true });
 });
 
@@ -351,12 +360,11 @@ app.post('/api/payment/create', auth, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
-  const price = PRICES[deviceCount] || 200;
-  const priceStr = price.toFixed(2);
+  const price = PRICES[Math.max(deviceCount, 1)] || 200;
 
   try {
     const payment = await yooRequest('POST', 'payments', {
-      amount: { value: priceStr, currency: 'RUB' },
+      amount: { value: price.toFixed(2), currency: 'RUB' },
       confirmation: { type: 'redirect', return_url: `${SITE_URL}/cabinet` },
       capture: true,
       description: `AmaemonVPN 30 дней, ${deviceCount} устр. — ${user.email}`,
@@ -379,10 +387,16 @@ app.post('/api/payment/webhook', async (req, res) => {
     if (!user) return res.sendStatus(200);
 
     const now = Math.floor(Date.now() / 1000);
+    const wasExpired = user.subscription_ends < now;
     const base = Math.max(user.subscription_ends || now, now);
     const new_ends = base + 30 * 24 * 3600;
     db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, userId);
-    if (user.subscription_ends < now) restoreUserPeers(userId);
+
+    if (wasExpired) {
+      db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
+      const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
+      devices.forEach(d => addPeer(d.client_name, d.config_path));
+    }
 
     console.log(`Payment succeeded for ${user.email}, ends: ${new_ends}`);
   }
@@ -415,31 +429,28 @@ app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
 // ── Проверка истекших подписок ──
 function checkExpired() {
   const now = Math.floor(Date.now() / 1000);
-  const expiredUsers = db.prepare(
-    'SELECT id FROM users WHERE subscription_ends < ? AND subscription_ends IS NOT NULL'
-  ).all(now);
+  const expiredUsers = db.prepare(`
+    SELECT u.id, u.email FROM users u
+    WHERE u.subscription_ends < ? AND u.subscription_ends > 0
+    AND EXISTS (SELECT 1 FROM devices d WHERE d.user_id = u.id AND d.paused = 0)
+  `).all(now);
 
   if (expiredUsers.length === 0) return;
 
   expiredUsers.forEach(u => {
-    const devices = db.prepare('SELECT client_name FROM devices WHERE user_id = ?').all(u.id);
+    const devices = db.prepare('SELECT * FROM devices WHERE user_id = ? AND paused = 0').all(u.id);
     devices.forEach(d => {
-      try {
-        const pubKey = fs.readFileSync(
-          `/etc/amnezia/amneziawg/clients/${d.client_name}/public.key`, 'utf8'
-        ).trim();
-        execSync(`sudo awg set awg0 peer ${pubKey} remove`);
-        console.log(`Removed peer ${d.client_name}`);
-      } catch(e) {
-        console.error('Remove peer error:', d.client_name, e.message);
-      }
+      removePeer(d.client_name);
+      console.log(`Paused peer ${d.client_name} for user ${u.email}`);
     });
+    db.prepare('UPDATE devices SET paused = 1 WHERE user_id = ?').run(u.id);
   });
-
-  saveWgConfig();
 }
 
 setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired();
+
+// Восстанавливаем активные пиры при старте
+rebuildWgConfig();
 
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
