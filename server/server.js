@@ -276,4 +276,26 @@ function checkExpired() {
 setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired();
 
+app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
+  try {
+    const output = execSync('sudo awg show awg0 dump').toString();
+    const peers = {};
+    output.split('\n').slice(1).forEach(line => {
+      const parts = line.split('\t');
+      if (parts.length < 8) return;
+      const [pubKey, , endpoint, allowedIps, latestHandshake, rxBytes, txBytes] = parts;
+      peers[pubKey] = {
+        endpoint: endpoint === '(none)' ? null : endpoint,
+        allowedIps,
+        latestHandshake: parseInt(latestHandshake) || 0,
+        rxBytes: parseInt(rxBytes) || 0,
+        txBytes: parseInt(txBytes) || 0
+      };
+    });
+    res.json(peers);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(3000, () => console.log('AmaemonVPN API running on :3000'));
