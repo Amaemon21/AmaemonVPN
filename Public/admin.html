@@ -33,6 +33,68 @@
     .traffic { font-family: monospace; font-size: 12px; color: var(--muted); }
     .handshake { font-size: 12px; color: var(--muted); }
 
+    /* Search bar */
+    .search-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+    .search-input-wrap {
+      position: relative;
+      flex: 1;
+      max-width: 420px;
+    }
+    .search-input-wrap svg {
+      position: absolute;
+      left: 0.7rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 15px;
+      height: 15px;
+      stroke: var(--muted);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 0.8rem 0.5rem 2.2rem;
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--muted); }
+    .search-clear {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      transition: color 0.2s;
+      display: none;
+    }
+    .search-clear:hover { color: var(--text); }
+    .search-count {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    mark {
+      background: rgba(108,99,255,0.28);
+      color: var(--text);
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+
     /* Devices sub-table */
     .devices-row { display: none; }
     .devices-row.open { display: table-row; }
@@ -89,6 +151,22 @@
     </div>
   </div>
 
+  <!-- Search bar -->
+  <div class="search-bar">
+    <div class="search-input-wrap">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input
+        class="search-input"
+        id="search-input"
+        type="text"
+        placeholder="Поиск по имени или email..."
+        oninput="onSearch(this.value)"
+      >
+    </div>
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕ Сбросить</button>
+    <span class="search-count" id="search-count"></span>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -118,6 +196,7 @@
   let usersData = [];
   let statsData = {};
   let tickInterval;
+  let searchQuery = '';
 
   async function loadAll() {
     await Promise.all([loadUsers(), loadStats()]);
@@ -168,34 +247,74 @@
     document.getElementById('stat-devices').textContent = totalDevices;
   }
 
+  // ── Search ──────────────────────────────────────────
+  function onSearch(val) {
+    searchQuery = val.trim().toLowerCase();
+    document.getElementById('search-clear').style.display = searchQuery ? 'inline-block' : 'none';
+    renderTable();
+  }
+
+  function clearSearch() {
+    document.getElementById('search-input').value = '';
+    onSearch('');
+    document.getElementById('search-input').focus();
+  }
+
+  function highlight(str, query) {
+    if (!query) return esc(str);
+    const escaped = esc(str);
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escaped.replace(new RegExp('(' + escapedQuery + ')', 'gi'), '<mark>$1</mark>');
+  }
+
+  function filterUsers() {
+    if (!searchQuery) return usersData;
+    return usersData.filter(u =>
+      u.full_name.toLowerCase().includes(searchQuery) ||
+      u.email.toLowerCase().includes(searchQuery)
+    );
+  }
+  // ────────────────────────────────────────────────────
+
   function renderTable() {
     const now = Math.floor(Date.now() / 1000);
     const tbody = document.getElementById('users-tbody');
+    const filtered = filterUsers();
+
+    // Update search count label
+    const countEl = document.getElementById('search-count');
+    if (searchQuery) {
+      countEl.textContent = `Найдено: ${filtered.length} из ${usersData.length}`;
+    } else {
+      countEl.textContent = '';
+    }
 
     if (!usersData.length) {
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">Нет пользователей</td></tr>';
       return;
     }
 
-    tbody.innerHTML = usersData.map(u => {
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem;">Ничего не найдено</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(u => {
       const active = u.subscription_ends > now;
       const devices = u.devices || [];
 
-      // Проверяем онлайн по устройствам
       const onlineDevices = devices.filter(d => {
         const peer = d.vpn_ip ? findPeerByIp(d.vpn_ip) : null;
         return peer && peer.latestHandshake && (now - peer.latestHandshake) < 180;
       });
       const isOnline = onlineDevices.length > 0;
 
-      // Суммарный трафик
       let totalRx = 0, totalTx = 0;
       devices.forEach(d => {
         const peer = d.vpn_ip ? findPeerByIp(d.vpn_ip) : null;
         if (peer) { totalRx += peer.rxBytes; totalTx += peer.txBytes; }
       });
 
-      // Devices subtable
       const devicesHtml = devices.map(d => {
         const peer = d.vpn_ip ? findPeerByIp(d.vpn_ip) : null;
         const online = peer && peer.latestHandshake && (now - peer.latestHandshake) < 180;
@@ -218,9 +337,9 @@
           </td>
           <td>
             <span class="online-dot ${isOnline ? 'online' : ''}"></span>
-            ${esc(u.full_name)}
+            ${highlight(u.full_name, searchQuery)}
           </td>
-          <td style="color:var(--muted)">${esc(u.email)}</td>
+          <td style="color:var(--muted)">${highlight(u.email, searchQuery)}</td>
           <td style="text-align:center">${devices.length}</td>
           <td style="color:var(--muted)">${formatDate(u.created_at)}</td>
           <td>${formatDateTime(u.subscription_ends)}</td>
@@ -269,7 +388,8 @@
   function startTick() {
     if (tickInterval) clearInterval(tickInterval);
     tickInterval = setInterval(() => {
-      usersData.forEach(u => {
+      const filtered = filterUsers();
+      filtered.forEach(u => {
         const el = document.getElementById('tl-' + u.id);
         if (!el) return;
         const active = u.subscription_ends > Math.floor(Date.now() / 1000);
