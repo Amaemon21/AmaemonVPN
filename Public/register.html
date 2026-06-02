@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Регистрация — AmaemonVPN</title>
+  <title>Регистрация — HappVPN</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/png" href="/img/favicon.png">
 </head>
 <body>
 
 <nav>
-  <div class="logo">AmaemonVPN</div>
+  <div class="logo"><span class="logo-dot"></span>HappVPN</div>
   <div class="nav-links">
     <a href="/">← На главную</a>
   </div>
@@ -19,25 +19,25 @@
 <div class="auth-wrap">
   <div class="auth-box">
     <h2>Регистрация</h2>
-    <p>Создайте аккаунт — конфиг выдаётся сразу</p>
+    <p>Создайте аккаунт — 3 часа бесплатно сразу</p>
 
-    <div id="error-msg" style="display:none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; padding: 0.6rem 0.9rem; border-radius: 8px; font-size: 13px; margin-bottom: 1rem;"></div>
+    <div id="error-msg" style="display:none; background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.25); color: var(--red); padding: 0.65rem 1rem; border-radius: 9px; font-size: 13px; margin-bottom: 1rem;"></div>
 
     <div class="field">
-      <label>ФИО <span style="color:#ef4444">*</span></label>
+      <label>ФИО <span style="color:var(--red)">*</span></label>
       <input type="text" id="full_name" placeholder="Иванов Иван Иванович">
     </div>
     <div class="field">
-      <label>Email <span style="color:#ef4444">*</span></label>
+      <label>Email <span style="color:var(--red)">*</span></label>
       <input type="email" id="email" placeholder="you@example.com" oninput="validateEmail(this)">
       <div id="email-hint" style="font-size:12px; margin-top:0.3rem; display:none;"></div>
     </div>
     <div class="field">
-      <label>Пароль <span style="color:#ef4444">*</span></label>
+      <label>Пароль <span style="color:var(--red)">*</span></label>
       <input type="password" id="password" placeholder="••••••••">
     </div>
     <div class="field">
-      <label>Повторите пароль <span style="color:#ef4444">*</span></label>
+      <label>Повторите пароль <span style="color:var(--red)">*</span></label>
       <input type="password" id="password2" placeholder="••••••••" oninput="validatePasswords()">
       <div id="pass-hint" style="font-size:12px; margin-top:0.3rem; display:none;"></div>
     </div>
@@ -57,8 +57,8 @@
     if (!val) { hint.style.display = 'none'; return; }
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
     hint.style.display = 'block';
-    hint.style.color = valid ? '#22c55e' : '#ef4444';
-    hint.textContent = valid ? '✓ Email корректный' : '✗ Введите корректный email (example@mail.ru)';
+    hint.style.color = valid ? 'var(--green)' : 'var(--red)';
+    hint.textContent = valid ? '✓ Email корректный' : '✗ Введите корректный email';
   }
 
   function validatePasswords() {
@@ -67,7 +67,7 @@
     const p2 = document.getElementById('password2').value;
     if (!p2) { hint.style.display = 'none'; return; }
     hint.style.display = 'block';
-    hint.style.color = p1 === p2 ? '#22c55e' : '#ef4444';
+    hint.style.color = p1 === p2 ? 'var(--green)' : 'var(--red)';
     hint.textContent = p1 === p2 ? '✓ Пароли совпадают' : '✗ Пароли не совпадают';
   }
 
@@ -128,6 +128,5 @@
     document.getElementById('error-msg').style.display = 'none';
   }
 </script>
-
 </body>
 </html>
