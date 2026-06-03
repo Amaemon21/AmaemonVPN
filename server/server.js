@@ -7,7 +7,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 
-require('dotenv').config({ path: '/var/www/amaemonvpn/server/.env' });
+require('dotenv').config();
 
 const app = express();
 app.use(express.json());
@@ -43,7 +43,7 @@ PostDown = iptables -D FORWARD -i awg0 -j ACCEPT; iptables -D FORWARD -o awg0 -j
 
 // ── VLESS+Reality параметры ──
 const SERVER_IP = process.env.SERVER_IP || '31.172.77.46';
-const SERVER_PORT = process.env.SERVER_PORT || '443';
+const SERVER_PORT = process.env.SERVER_PORT || '8443';
 const REALITY_PUBLIC_KEY = process.env.REALITY_PUBLIC_KEY || '';
 const REALITY_SHORT_ID = process.env.REALITY_SHORT_ID || '';
 const REALITY_SNI = process.env.REALITY_SNI || 'www.microsoft.com';
@@ -185,7 +185,7 @@ function readXrayConfig() {
 function writeXrayConfig(cfg) {
   fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(cfg, null, 2));
   try {
-    execSync('sudo systemctl restart xray', { timeout: 5000 });
+    execSync('sudo systemctl reload xray', { timeout: 5000 });
   } catch(e) {
     console.error('xray reload error:', e.message);
   }
@@ -445,25 +445,38 @@ app.get('/api/admin/users', auth, adminOnly, (req, res) => {
   res.json(result);
 });
 
-// ── Админ: продлить подписку ──
+// ── Админ: продлить/уменьшить подписку ──
 app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   const { hours } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const now = Math.floor(Date.now() / 1000);
-  const wasExpired = user.subscription_ends < now;
-  const base = Math.max(user.subscription_ends || now, now);
-  const new_ends = base + (hours || 720) * 3600;
+  const h = hours || 720;
 
-  db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
-
-  if (wasExpired) {
-    db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(user.id);
-    const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
-    devices.forEach(d => activateDevice(d, user.email));
+  let new_ends;
+  if (h > 0) {
+    // Продление — от текущего конца или от сейчас
+    const wasExpired = user.subscription_ends < now;
+    const base = Math.max(user.subscription_ends || now, now);
+    new_ends = base + h * 3600;
+    if (wasExpired) {
+      db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(user.id);
+      const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
+      devices.forEach(d => activateDevice(d, user.email));
+    }
+  } else {
+    // Вычитание — от текущего конца
+    new_ends = Math.max((user.subscription_ends || now) + h * 3600, 0);
+    // Если после вычитания подписка истекла — приостанавливаем устройства
+    if (new_ends < now) {
+      const devices = db.prepare('SELECT * FROM devices WHERE user_id = ? AND paused = 0').all(user.id);
+      devices.forEach(d => deactivateDevice(d));
+      db.prepare('UPDATE devices SET paused = 1 WHERE user_id = ?').run(user.id);
+    }
   }
 
+  db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
   res.json({ success: true, subscription_ends: new_ends });
 });
 
