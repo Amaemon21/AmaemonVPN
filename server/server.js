@@ -7,7 +7,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 
-require('dotenv').config();
+require('dotenv').config({ path: '/var/www/amaemonvpn/server/.env', override: false });
 
 const app = express();
 app.use(express.json());
@@ -190,7 +190,7 @@ function readXrayConfig() {
 function writeXrayConfig(cfg) {
   fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(cfg, null, 2));
   try {
-    execSync('sudo systemctl reload xray', { timeout: 5000 });
+    execSync('sudo systemctl restart xray', { timeout: 5000 });
   } catch(e) {
     console.error('xray reload error:', e.message);
   }
