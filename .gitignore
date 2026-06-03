@@ -1,1 +1,3 @@
 server/.env
+server/vpn.db
+server/*.db
