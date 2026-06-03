@@ -48,6 +48,7 @@ const REALITY_PUBLIC_KEY = process.env.REALITY_PUBLIC_KEY || '';
 const REALITY_SHORT_ID = process.env.REALITY_SHORT_ID || '';
 const REALITY_SNI = process.env.REALITY_SNI || 'www.microsoft.com';
 const XRAY_CONFIG_PATH = process.env.XRAY_CONFIG_PATH || '/usr/local/etc/xray/config.json';
+const REFERRAL_BONUS_DAYS = 7;
 
 // ── База данных ──
 const db = new Database(DB_PATH);
@@ -59,6 +60,9 @@ db.exec(`
     password_hash     TEXT NOT NULL,
     full_name         TEXT NOT NULL,
     subscription_ends INTEGER DEFAULT 0,
+    referral_code     TEXT UNIQUE,
+    referred_by       INTEGER DEFAULT NULL,
+    referral_rewarded INTEGER DEFAULT 0,
     created_at        INTEGER DEFAULT (unixepoch())
   );
 
@@ -299,16 +303,30 @@ function yooRequest(method, path, body) {
 
 // ── Регистрация ──
 app.post('/api/register', async (req, res) => {
-  const { email, password, full_name } = req.body;
+  const { email, password, full_name, ref } = req.body;
   if (!email || !password || !full_name)
     return res.status(400).json({ error: 'Заполните все поля' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: 'Некорректный email' });
   if (db.prepare('SELECT id FROM users WHERE email = ?').get(email))
     return res.status(400).json({ error: 'Email уже зарегистрирован' });
+
   const password_hash = await bcrypt.hash(password, 10);
   const free_ends = Math.floor(Date.now() / 1000) + 3 * 60 * 60;
-  db.prepare('INSERT INTO users (email, password_hash, full_name, subscription_ends) VALUES (?, ?, ?, ?)').run(email, password_hash, full_name, free_ends);
+  const referral_code = crypto.randomBytes(5).toString('hex'); // 10-символьный код
+
+  // Ищем пригласившего по реф. коду
+  let referred_by = null;
+  if (ref) {
+    const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(ref);
+    if (referrer) referred_by = referrer.id;
+  }
+
+  db.prepare(`
+    INSERT INTO users (email, password_hash, full_name, subscription_ends, referral_code, referred_by)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(email, password_hash, full_name, free_ends, referral_code, referred_by);
+
   res.json({ success: true });
 });
 
@@ -325,10 +343,12 @@ app.post('/api/login', async (req, res) => {
 
 // ── Профиль ──
 app.get('/api/me', auth, (req, res) => {
-  const user = db.prepare('SELECT id, email, full_name, subscription_ends, created_at FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, email, full_name, subscription_ends, referral_code, created_at FROM users WHERE id = ?').get(req.user.id);
   const devices = db.prepare('SELECT id, name, protocol, download_token, paused, created_at FROM devices WHERE user_id = ?').all(req.user.id);
   const price = PRICES[devices.length] || PRICES[1];
-  res.json({ ...user, devices, device_count: devices.length, price });
+  const referral_count = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ?').get(req.user.id).cnt;
+  const referral_paid = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ? AND referral_rewarded = 1').get(req.user.id).cnt;
+  res.json({ ...user, devices, device_count: devices.length, price, referral_count, referral_paid });
 });
 
 // ── Устройства: добавить ──
@@ -551,6 +571,19 @@ app.post('/api/payment/webhook', async (req, res) => {
       db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
       const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
       devices.forEach(d => activateDevice(d, user.email));
+    }
+
+    // Реферальный бонус — только при первой оплате и если не был начислен
+    if (user.referred_by && !user.referral_rewarded) {
+      const referrer = db.prepare('SELECT * FROM users WHERE id = ?').get(user.referred_by);
+      if (referrer) {
+        const bonus = REFERRAL_BONUS_DAYS * 24 * 3600;
+        const referrerBase = Math.max(referrer.subscription_ends || now, now);
+        db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?')
+          .run(referrerBase + bonus, referrer.id);
+        db.prepare('UPDATE users SET referral_rewarded = 1 WHERE id = ?').run(userId);
+        console.log(`Referral bonus +${REFERRAL_BONUS_DAYS}d to ${referrer.email} for inviting ${user.email}`);
+      }
     }
 
     console.log(`Payment succeeded for ${user.email}`);

@@ -89,11 +89,14 @@
     btn.disabled = true;
     btn.textContent = 'Создаём аккаунт...';
 
+    // Берём реферальный код из URL если есть
+    const ref = new URLSearchParams(window.location.search).get('ref') || null;
+
     try {
       const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name })
+        body: JSON.stringify({ email, password, full_name, ref })
       });
       const data = await res.json();
       if (!res.ok) return showError(data.error || 'Ошибка');
