@@ -185,7 +185,7 @@ function readXrayConfig() {
 function writeXrayConfig(cfg) {
   fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(cfg, null, 2));
   try {
-    execSync('sudo systemctl reload xray', { timeout: 5000 });
+    execSync('sudo systemctl restart xray', { timeout: 5000 });
   } catch(e) {
     console.error('xray reload error:', e.message);
   }
