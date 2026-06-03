@@ -272,12 +272,21 @@
         `;
       }).join('');
 
+      const isOnline = devices.some(d => {
+        if (d.protocol !== 'amnezia' || !d.vpn_ip || !statsData.wg_peers) return false;
+        const peer = Object.values(statsData.wg_peers).find(p => p.allowedIps === d.vpn_ip + '/32');
+        return peer && peer.latestHandshake && (now - peer.latestHandshake) < 180;
+      });
+
       return `
         <tr class="user-row" id="user-row-${u.id}">
           <td>
             <button class="expand-btn" onclick="toggleDevices(${u.id})" id="expand-${u.id}">▶</button>
           </td>
-          <td>${highlight(u.full_name, searchQuery)}</td>
+          <td>
+            <span class="online-dot ${isOnline ? 'online' : ''}"></span>
+            ${highlight(u.full_name, searchQuery)}
+          </td>
           <td style="color:var(--muted2)">${highlight(u.email, searchQuery)}</td>
           <td style="text-align:center">${devices.length}</td>
           <td style="color:var(--muted2)">${formatDate(u.created_at)}</td>
