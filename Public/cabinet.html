@@ -123,6 +123,35 @@
     </div>
   </div>
 
+  <!-- Реферальный блок -->
+  <div class="cabinet-grid">
+    <div class="cabinet-card">
+      <h4>Реферальная программа</h4>
+      <p style="font-size:13px; color:var(--muted2); margin-bottom:1rem; line-height:1.6;">
+        Приглашай друзей — получай <strong style="color:var(--accent)">+7 дней</strong> за каждого кто оплатит подписку по твоей ссылке.
+      </p>
+      <div style="display:flex; gap:0.5rem; margin-bottom:0.8rem;">
+        <input type="text" id="ref-link" readonly
+          style="flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.55rem 0.9rem; font-size:12px; font-family:monospace; color:var(--muted2); outline:none;">
+        <button class="btn-copy-link" id="ref-copy-btn" onclick="copyRefLink()" style="white-space:nowrap;">Скопировать</button>
+      </div>
+      <div style="display:flex; gap:1.5rem;">
+        <div>
+          <div style="font-size:1.4rem; font-weight:700; font-family:var(--font-display);" id="ref-count">—</div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Приглашено</div>
+        </div>
+        <div>
+          <div style="font-size:1.4rem; font-weight:700; font-family:var(--font-display); color:var(--accent);" id="ref-paid">—</div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Оплатили</div>
+        </div>
+        <div>
+          <div style="font-size:1.4rem; font-weight:700; font-family:var(--font-display); color:var(--green);" id="ref-bonus">—</div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Бонус дней</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="cabinet-grid">
     <div class="cabinet-card">
       <h4>Устройства <span id="devices-count" style="color:var(--muted2); font-weight:400; font-size:12px;"></span></h4>
@@ -271,8 +300,43 @@
     document.getElementById('info-created').textContent = formatDate(user.created_at);
     document.getElementById('ends-at').textContent = user.subscription_ends > 0 ? 'до ' + formatDateTime(user.subscription_ends) : '';
     document.getElementById('pay-price').textContent = user.price || 200;
+
+    // Реферальная ссылка
+    if (user.referral_code) {
+      document.getElementById('ref-link').value = window.location.origin + '/register?ref=' + user.referral_code;
+      document.getElementById('ref-count').textContent = user.referral_count || 0;
+      document.getElementById('ref-paid').textContent = user.referral_paid || 0;
+      document.getElementById('ref-bonus').textContent = '+' + ((user.referral_paid || 0) * 7) + 'д';
+    }
+
     renderDevices(user.devices || []);
     startCountdown(user.subscription_ends * 1000);
+  }
+
+  function copyRefLink() {
+    const input = document.getElementById('ref-link');
+    const btn = document.getElementById('ref-copy-btn');
+    const text = input.value;
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showRefCopied(btn)).catch(() => fallbackRefCopy(btn, text));
+    } else {
+      fallbackRefCopy(btn, text);
+    }
+  }
+
+  function fallbackRefCopy(btn, text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showRefCopied(btn); } catch { prompt('Скопируйте ссылку:', text); }
+    document.body.removeChild(ta);
+  }
+
+  function showRefCopied(btn) {
+    btn.textContent = '✓ Скопировано!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Скопировать'; btn.classList.remove('copied'); }, 2500);
   }
 
   // Кэш ссылок чтобы не делать fetch каждый раз
