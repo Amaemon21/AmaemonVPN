@@ -275,6 +275,24 @@
     startCountdown(user.subscription_ends * 1000);
   }
 
+  // Кэш ссылок чтобы не делать fetch каждый раз
+  const linkCache = {};
+
+  // Предзагружаем ссылки для всех vless устройств
+  async function preloadLinks(devices) {
+    for (const d of devices) {
+      if (d.protocol === 'vless' && !linkCache[d.id]) {
+        try {
+          const res = await fetch('/link/' + d.download_token);
+          if (res.ok) {
+            const data = await res.json();
+            linkCache[d.id] = data.link;
+          }
+        } catch {}
+      }
+    }
+  }
+
   function renderDevices(devices) {
     const list = document.getElementById('devices-list');
     const count = document.getElementById('devices-count');
@@ -296,13 +314,15 @@
           <div class="device-actions">
             ${d.protocol === 'amnezia'
               ? `<a class="btn-dl" href="/download/${d.download_token}">Скачать конфиг</a>`
-              : `<button class="btn-copy-link" id="copy-btn-${d.id}" onclick="copyLink('${d.download_token}', ${d.id})">Скопировать ссылку</button>`
+              : `<button class="btn-copy-link" id="copy-btn-${d.id}" onclick="copyLinkCached(${d.id})">Скопировать ссылку</button>`
             }
             <button class="btn-rm" onclick="removeDevice(${d.id})">✕</button>
           </div>
         </div>
       `).join('');
     }
+    // Предзагружаем ссылки в фоне
+    preloadLinks(devices);
 
     addWrap.style.display = devices.length >= MAX_DEVICES ? 'none' : 'block';
 
@@ -315,19 +335,63 @@
     }
   }
 
-  async function copyLink(downloadToken, deviceId) {
+  // Safari-совместимое копирование — ссылка уже в кэше, копируем синхронно
+  function copyLinkCached(deviceId) {
     const btn = document.getElementById('copy-btn-' + deviceId);
-    try {
-      const res = await fetch('/link/' + downloadToken);
-      if (!res.ok) { alert('Ошибка получения ссылки'); return; }
-      const data = await res.json();
-      await navigator.clipboard.writeText(data.link);
-      btn.textContent = '✓ Скопировано!';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Скопировать ссылку'; btn.classList.remove('copied'); }, 2500);
-    } catch {
-      alert('Не удалось скопировать автоматически. Попробуйте ещё раз.');
+    const link = linkCache[deviceId];
+
+    if (!link) {
+      btn.textContent = 'Загрузка...';
+      // Если кэш пустой — загружаем и сразу копируем
+      const device = currentUser.devices.find(d => d.id === deviceId);
+      if (!device) return;
+      fetch('/link/' + device.download_token)
+        .then(r => r.json())
+        .then(data => {
+          linkCache[deviceId] = data.link;
+          doCopy(btn, data.link);
+        })
+        .catch(() => { btn.textContent = 'Скопировать ссылку'; alert('Ошибка получения ссылки'); });
+      return;
     }
+    doCopy(btn, link);
+  }
+
+  function doCopy(btn, text) {
+    // Метод 1: современный Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showCopied(btn);
+      }).catch(() => fallbackCopy(btn, text));
+    } else {
+      fallbackCopy(btn, text);
+    }
+  }
+
+  // Метод 2: textarea fallback для Safari и старых браузеров
+  function fallbackCopy(btn, text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showCopied(btn);
+    } catch {
+      // Метод 3: показываем ссылку для ручного копирования
+      prompt('Скопируйте ссылку вручную (Ctrl+C / Cmd+C):', text);
+    }
+    document.body.removeChild(ta);
+  }
+
+  function showCopied(btn) {
+    btn.textContent = '✓ Скопировано!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Скопировать ссылку'; btn.classList.remove('copied'); }, 2500);
   }
 
   async function addDevice() {
