@@ -3,14 +3,94 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Личный кабинет — HappVPN</title>
+  <title>Личный кабинет — AmaeonVPN</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/png" href="/img/favicon.png">
+  <style>
+    .countdown { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.03em; font-family: var(--font-display); }
+    .countdown.expired { color: var(--red); }
+    .countdown.active { color: var(--accent); }
+    .user-info-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .user-info-row:last-child { border-bottom: none; }
+    .user-info-label { color: var(--muted2); }
+
+    /* Protocol selector */
+    .proto-select { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
+    .proto-btn {
+      flex: 1; padding: 0.55rem 0.5rem; border-radius: 9px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--muted2); font-size: 13px; font-family: var(--font);
+      cursor: pointer; transition: all 0.15s; text-align: center; display: flex;
+      flex-direction: column; align-items: center; gap: 3px;
+    }
+    .proto-btn .proto-name { font-weight: 600; font-size: 13px; }
+    .proto-btn .proto-sub { font-size: 11px; opacity: 0.7; }
+    .proto-btn.active { border-color: var(--accent); background: rgba(0,212,255,0.08); color: var(--text); }
+    .proto-btn.active .proto-name { color: var(--accent); }
+
+    .add-device-form { display: flex; gap: 0.5rem; }
+    .add-device-form input {
+      flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.55rem 0.9rem; font-size: 13px; font-family: var(--font); color: var(--text);
+      outline: none; transition: border-color 0.2s;
+    }
+    .add-device-form input:focus { border-color: var(--accent); }
+    .price-hint { font-size: 12px; color: var(--muted); margin-top: 0.5rem; }
+    .empty-devices { text-align: center; padding: 1.6rem 0; }
+    .empty-devices p { color: var(--muted2); font-size: 14px; margin-bottom: 1rem; }
+
+    .device-row { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px solid var(--border); gap: 0.5rem; }
+    .device-row:last-child { border-bottom: none; }
+    .device-info { flex: 1; min-width: 0; }
+    .device-name { font-size: 14px; }
+    .device-paused { font-size: 11px; color: var(--red); margin-left: 0.4rem; }
+    .device-proto { font-size: 11px; margin-top: 2px; }
+    .device-proto.amnezia { color: #7b61ff; }
+    .device-proto.vless { color: var(--accent); }
+    .device-actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
+
+    .btn-copy-link {
+      background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 7px; padding: 0.25rem 0.8rem; font-size: 12px; font-family: var(--font);
+      cursor: pointer; transition: background 0.2s; white-space: nowrap; text-decoration: none; display: inline-block;
+    }
+    .btn-copy-link:hover { background: rgba(0,212,255,0.18); text-decoration: none; }
+    .btn-copy-link.copied { background: rgba(0,230,118,0.1); color: var(--green); border-color: rgba(0,230,118,0.2); }
+    .btn-dl {
+      background: rgba(123,97,255,0.1); color: #9d97ff; border: 1px solid rgba(123,97,255,0.2);
+      border-radius: 7px; padding: 0.25rem 0.8rem; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-block; white-space: nowrap;
+    }
+    .btn-dl:hover { background: rgba(123,97,255,0.18); text-decoration: none; }
+    .btn-rm {
+      background: rgba(255,71,87,0.1); color: var(--red); border: 1px solid rgba(255,71,87,0.2);
+      border-radius: 7px; padding: 0.25rem 0.6rem; font-size: 12px; font-family: var(--font); cursor: pointer;
+    }
+    .btn-rm:hover { background: rgba(255,71,87,0.2); }
+
+    .platform-links { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.9rem; }
+    .platform-btn {
+      display: flex; align-items: center; gap: 0.55rem; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: 9px; padding: 0.55rem 0.8rem;
+      text-decoration: none; color: var(--text); font-size: 12px; transition: border-color 0.2s, background 0.2s;
+    }
+    .platform-btn:hover { border-color: var(--accent); background: rgba(0,212,255,0.05); text-decoration: none; }
+    .platform-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .platform-label { display: flex; flex-direction: column; line-height: 1.25; }
+    .platform-label span:first-child { font-size: 10px; color: var(--muted); }
+    .platform-label span:last-child { font-size: 12px; font-weight: 500; }
+
+    .section-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .tab-btn {
+      padding: 0.35rem 0.9rem; border-radius: 7px; border: 1px solid var(--border);
+      background: none; color: var(--muted2); font-size: 12px; font-family: var(--font);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .tab-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+  </style>
 </head>
 <body>
 
 <nav>
-  <div class="logo"><span class="logo-dot"></span>HappVPN</div>
+  <div class="logo"><span class="logo-dot"></span>AmaeonVPN</div>
   <div class="nav-links">
     <a href="/">Сайт</a>
     <span style="color: var(--text); font-size: 14px;">Кабинет</span>
@@ -25,7 +105,6 @@
   </div>
 
   <div class="cabinet-grid">
-
     <div class="cabinet-card">
       <h4>Подписка</h4>
       <div class="countdown active" id="countdown">—</div>
@@ -38,28 +117,28 @@
 
     <div class="cabinet-card">
       <h4>Данные аккаунта</h4>
-      <div class="user-info-row">
-        <span class="user-info-label">ФИО</span>
-        <span id="info-name">—</span>
-      </div>
-      <div class="user-info-row">
-        <span class="user-info-label">Email</span>
-        <span id="info-email">—</span>
-      </div>
-      <div class="user-info-row">
-        <span class="user-info-label">Зарегистрирован</span>
-        <span id="info-created">—</span>
-      </div>
+      <div class="user-info-row"><span class="user-info-label">ФИО</span><span id="info-name">—</span></div>
+      <div class="user-info-row"><span class="user-info-label">Email</span><span id="info-email">—</span></div>
+      <div class="user-info-row"><span class="user-info-label">Зарегистрирован</span><span id="info-created">—</span></div>
     </div>
-
   </div>
 
   <div class="cabinet-grid">
-
     <div class="cabinet-card">
-      <h4>Устройства <span id="devices-count" style="color:var(--muted); font-weight:400; font-size:12px;"></span></h4>
+      <h4>Устройства <span id="devices-count" style="color:var(--muted2); font-weight:400; font-size:12px;"></span></h4>
       <div id="devices-list"></div>
       <div id="add-device-wrap">
+        <!-- Выбор протокола -->
+        <div class="proto-select" id="proto-select">
+          <button class="proto-btn active" id="proto-amnezia" onclick="selectProto('amnezia')">
+            <span class="proto-name">Amnezia</span>
+            <span class="proto-sub">AmneziaWG</span>
+          </button>
+          <button class="proto-btn" id="proto-vless" onclick="selectProto('vless')">
+            <span class="proto-name">Happ</span>
+            <span class="proto-sub">VLESS+Reality</span>
+          </button>
+        </div>
         <div class="add-device-form">
           <input type="text" id="device-name-input" placeholder="Название (iPhone, ПК, MacBook...)" maxlength="30"
             onkeydown="if(event.key==='Enter')addDevice()">
@@ -74,53 +153,77 @@
     <div class="cabinet-card">
       <h4>Статус сервера</h4>
       <div class="status-row">
-        <div class="dot"></div>
-        <span class="status-label">Сервер активен</span>
-        <span class="status-val">31.172.77.46</span>
+        <div class="dot"></div><span class="status-label">Сервер активен</span><span class="status-val">31.172.77.46</span>
       </div>
       <div class="status-row">
-        <div class="dot"></div>
-        <span class="status-label">Протокол</span>
-        <span class="status-val">VLESS + Reality</span>
+        <div class="dot"></div><span class="status-label">AmneziaWG</span><span class="status-val">порт 443</span>
       </div>
       <div class="status-row">
-        <div class="dot"></div>
-        <span class="status-label">Порт</span>
-        <span class="status-val">443 / TCP</span>
+        <div class="dot"></div><span class="status-label">VLESS+Reality</span><span class="status-val">порт 8443</span>
       </div>
       <div class="status-row">
-        <div class="dot"></div>
-        <span class="status-label">Обфускация DPI</span>
-        <span class="status-val">включена</span>
+        <div class="dot"></div><span class="status-label">Обфускация DPI</span><span class="status-val">включена</span>
       </div>
     </div>
-
   </div>
 
   <div class="cabinet-grid">
     <div class="cabinet-card">
       <h4>Инструкция</h4>
-      <ol style="padding-left:1.3rem; color:var(--muted2); font-size:14px; line-height:2.1; margin-bottom:1.2rem;">
-        <li>Добавь устройство выше</li>
-        <li>Нажми <strong style="color:var(--text)">«Скопировать ссылку»</strong></li>
-        <li>Открой приложение <strong style="color:var(--text)">Happ</strong></li>
-        <li>Нажми «+» → «Добавить вручную» или «Из буфера»</li>
-        <li>Вставь скопированную ссылку — готово</li>
-      </ol>
-      <div style="font-size:12px; color:var(--muted); margin-bottom:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Скачать Happ</div>
-      <div class="platform-links">
-        <a class="platform-btn" href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          <div class="platform-label"><span>Скачать в</span><span>App Store</span></div>
-        </a>
-        <a class="platform-btn" href="https://play.google.com/store/apps/details?id=io.happ.proxy" target="_blank">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.25.99.22l.06-.04 11.2-6.47-2.41-2.41-9.84 8.7zm-1.8-20.1C1.14 4 1 4.5 1 5.14v13.72c0 .64.14 1.14.38 1.48l.08.07 7.69-7.69v-.18L1.46 3.6l-.08.06zM20.1 10.3l-2.25-1.3-2.7 2.7 2.7 2.7 2.27-1.31c.65-.37.65-.98 0-1.79zM4.17.24L15.37 6.7l-2.41 2.42L3.12.41l.06-.04c.3-.2.67-.25.99-.13z"/></svg>
-          <div class="platform-label"><span>Скачать в</span><span>Google Play</span></div>
-        </a>
-        <a class="platform-btn" href="https://github.com/happ-proxy/happ/releases/latest" target="_blank" style="grid-column:1/-1;">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
-          <div class="platform-label"><span>Скачать для</span><span>Windows / macOS / Linux</span></div>
-        </a>
+
+      <div class="section-tabs">
+        <button class="tab-btn active" onclick="showTab('amnezia-guide', this)">Amnezia</button>
+        <button class="tab-btn" onclick="showTab('happ-guide', this)">Happ</button>
+      </div>
+
+      <div id="amnezia-guide">
+        <ol style="padding-left:1.3rem; color:var(--muted2); font-size:14px; line-height:2.1; margin-bottom:1rem;">
+          <li>Добавь устройство, выбрав <strong style="color:#9d97ff">Amnezia</strong></li>
+          <li>Нажми <strong style="color:var(--text)">«Скачать конфиг»</strong></li>
+          <li>Открой приложение <strong style="color:var(--text)">Amnezia VPN</strong></li>
+          <li>Нажми «+» → «Из файла» → выбери скачанный файл</li>
+          <li>Подключись</li>
+        </ol>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Скачать Amnezia VPN</div>
+        <div class="platform-links">
+          <a class="platform-btn" href="https://apps.apple.com/app/amneziawg/id6478942365" target="_blank">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            <div class="platform-label"><span>App Store</span><span>iOS</span></div>
+          </a>
+          <a class="platform-btn" href="https://play.google.com/store/apps/details?id=org.amnezia.vpn" target="_blank">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.25.99.22l.06-.04 11.2-6.47-2.41-2.41-9.84 8.7zm-1.8-20.1C1.14 4 1 4.5 1 5.14v13.72c0 .64.14 1.14.38 1.48l.08.07 7.69-7.69v-.18L1.46 3.6l-.08.06zM20.1 10.3l-2.25-1.3-2.7 2.7 2.7 2.7 2.27-1.31c.65-.37.65-.98 0-1.79zM4.17.24L15.37 6.7l-2.41 2.42L3.12.41l.06-.04c.3-.2.67-.25.99-.13z"/></svg>
+            <div class="platform-label"><span>Google Play</span><span>Android</span></div>
+          </a>
+          <a class="platform-btn" href="https://github.com/amnezia-vpn/amnezia-client/releases/latest" target="_blank" style="grid-column:1/-1;">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l6-1.32v6.57H3zm17 0v-7.5l-8 1.41V12h8zM3 13h6v6.42L3 18V13zm17 0h-8v6.83l8 1.41V13z"/></svg>
+            <div class="platform-label"><span>Windows / macOS / Linux</span><span>GitHub Releases</span></div>
+          </a>
+        </div>
+      </div>
+
+      <div id="happ-guide" style="display:none;">
+        <ol style="padding-left:1.3rem; color:var(--muted2); font-size:14px; line-height:2.1; margin-bottom:1rem;">
+          <li>Добавь устройство, выбрав <strong style="color:var(--accent)">Happ</strong></li>
+          <li>Нажми <strong style="color:var(--text)">«Скопировать ссылку»</strong></li>
+          <li>Открой приложение <strong style="color:var(--text)">Happ</strong></li>
+          <li>Нажми «+» → «Добавить вручную» или «Из буфера»</li>
+          <li>Вставь ссылку — готово</li>
+        </ol>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Скачать Happ</div>
+        <div class="platform-links">
+          <a class="platform-btn" href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            <div class="platform-label"><span>App Store</span><span>iOS</span></div>
+          </a>
+          <a class="platform-btn" href="https://play.google.com/store/apps/details?id=io.happ.proxy" target="_blank">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.25.99.22l.06-.04 11.2-6.47-2.41-2.41-9.84 8.7zm-1.8-20.1C1.14 4 1 4.5 1 5.14v13.72c0 .64.14 1.14.38 1.48l.08.07 7.69-7.69v-.18L1.46 3.6l-.08.06zM20.1 10.3l-2.25-1.3-2.7 2.7 2.7 2.7 2.27-1.31c.65-.37.65-.98 0-1.79zM4.17.24L15.37 6.7l-2.41 2.42L3.12.41l.06-.04c.3-.2.67-.25.99-.13z"/></svg>
+            <div class="platform-label"><span>Google Play</span><span>Android</span></div>
+          </a>
+          <a class="platform-btn" href="https://github.com/happ-proxy/happ/releases/latest" target="_blank" style="grid-column:1/-1;">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            <div class="platform-label"><span>Windows / macOS / Linux</span><span>GitHub Releases</span></div>
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -134,6 +237,21 @@
 
   let currentUser = null;
   let countdownInterval;
+  let selectedProto = 'amnezia';
+
+  function selectProto(proto) {
+    selectedProto = proto;
+    document.getElementById('proto-amnezia').classList.toggle('active', proto === 'amnezia');
+    document.getElementById('proto-vless').classList.toggle('active', proto === 'vless');
+  }
+
+  function showTab(id, btn) {
+    document.getElementById('amnezia-guide').style.display = 'none';
+    document.getElementById('happ-guide').style.display = 'none';
+    document.getElementById(id).style.display = 'block';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
 
   async function loadUser() {
     try {
@@ -151,8 +269,7 @@
     document.getElementById('info-name').textContent = user.full_name;
     document.getElementById('info-email').textContent = user.email;
     document.getElementById('info-created').textContent = formatDate(user.created_at);
-    document.getElementById('ends-at').textContent = user.subscription_ends > 0
-      ? 'до ' + formatDateTime(user.subscription_ends) : '';
+    document.getElementById('ends-at').textContent = user.subscription_ends > 0 ? 'до ' + formatDateTime(user.subscription_ends) : '';
     document.getElementById('pay-price').textContent = user.price || 200;
     renderDevices(user.devices || []);
     startCountdown(user.subscription_ends * 1000);
@@ -165,22 +282,22 @@
     count.textContent = `${devices.length} / ${MAX_DEVICES}`;
 
     if (!devices.length) {
-      list.innerHTML = `
-        <div class="empty-devices">
-          <p>У вас ещё нет устройств.<br>Добавьте первое устройство ниже.</p>
-        </div>`;
+      list.innerHTML = `<div class="empty-devices"><p>У вас ещё нет устройств.<br>Добавьте первое устройство ниже.</p></div>`;
     } else {
       list.innerHTML = devices.map(d => `
         <div class="device-row">
-          <span class="device-name">
-            ${esc(d.name)}
-            ${d.paused ? '<span class="device-paused">(пауза)</span>' : ''}
-          </span>
+          <div class="device-info">
+            <div class="device-name">
+              ${esc(d.name)}
+              ${d.paused ? '<span class="device-paused">(пауза)</span>' : ''}
+            </div>
+            <div class="device-proto ${d.protocol}">${d.protocol === 'amnezia' ? 'AmneziaWG' : 'VLESS+Reality'}</div>
+          </div>
           <div class="device-actions">
-            <button class="btn-copy-link" id="copy-btn-${d.id}"
-              onclick="copyLink('${d.download_token}', ${d.id})">
-              Скопировать ссылку
-            </button>
+            ${d.protocol === 'amnezia'
+              ? `<a class="btn-dl" href="/download/${d.download_token}">Скачать конфиг</a>`
+              : `<button class="btn-copy-link" id="copy-btn-${d.id}" onclick="copyLink('${d.download_token}', ${d.id})">Скопировать ссылку</button>`
+            }
             <button class="btn-rm" onclick="removeDevice(${d.id})">✕</button>
           </div>
         </div>
@@ -198,39 +315,18 @@
     }
   }
 
-  async function copyLink(token, deviceId) {
+  async function copyLink(downloadToken, deviceId) {
     const btn = document.getElementById('copy-btn-' + deviceId);
     try {
-      const res = await fetch('/link/' + token);
+      const res = await fetch('/link/' + downloadToken);
       if (!res.ok) { alert('Ошибка получения ссылки'); return; }
       const data = await res.json();
       await navigator.clipboard.writeText(data.link);
       btn.textContent = '✓ Скопировано!';
       btn.classList.add('copied');
-      setTimeout(() => {
-        btn.textContent = 'Скопировать ссылку';
-        btn.classList.remove('copied');
-      }, 2500);
+      setTimeout(() => { btn.textContent = 'Скопировать ссылку'; btn.classList.remove('copied'); }, 2500);
     } catch {
-      // fallback для старых браузеров
-      try {
-        const res = await fetch('/link/' + token);
-        const data = await res.json();
-        const ta = document.createElement('textarea');
-        ta.value = data.link;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        btn.textContent = '✓ Скопировано!';
-        btn.classList.add('copied');
-        setTimeout(() => {
-          btn.textContent = 'Скопировать ссылку';
-          btn.classList.remove('copied');
-        }, 2500);
-      } catch {
-        alert('Не удалось скопировать. Попробуйте вручную.');
-      }
+      alert('Не удалось скопировать автоматически. Попробуйте ещё раз.');
     }
   }
 
@@ -247,7 +343,7 @@
       const res = await fetch('/api/devices', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name, protocol: selectedProto })
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Ошибка'); return; }
@@ -262,7 +358,7 @@
   }
 
   async function removeDevice(deviceId) {
-    if (!confirm('Удалить устройство? Ссылка перестанет работать.')) return;
+    if (!confirm('Удалить устройство? Доступ будет отозван.')) return;
     try {
       const res = await fetch('/api/devices/' + deviceId, {
         method: 'DELETE',
@@ -324,10 +420,7 @@
   function pad(n) { return String(n).padStart(2, '0'); }
   function formatDate(unix) { return new Date(unix * 1000).toLocaleDateString('ru-RU'); }
   function formatDateTime(unix) {
-    return new Date(unix * 1000).toLocaleString('ru-RU', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    return new Date(unix * 1000).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function logout() { localStorage.removeItem('token'); window.location.href = '/'; }
