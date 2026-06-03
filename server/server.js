@@ -60,6 +60,7 @@ db.exec(`
     password_hash     TEXT NOT NULL,
     full_name         TEXT NOT NULL,
     subscription_ends INTEGER DEFAULT 0,
+    max_devices       INTEGER DEFAULT 0,
     referral_code     TEXT UNIQUE,
     referred_by       INTEGER DEFAULT NULL,
     referral_rewarded INTEGER DEFAULT 0,
@@ -343,9 +344,10 @@ app.post('/api/login', async (req, res) => {
 
 // ── Профиль ──
 app.get('/api/me', auth, (req, res) => {
-  const user = db.prepare('SELECT id, email, full_name, subscription_ends, referral_code, created_at FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, email, full_name, subscription_ends, max_devices, referral_code, created_at FROM users WHERE id = ?').get(req.user.id);
   const devices = db.prepare('SELECT id, name, protocol, download_token, paused, created_at FROM devices WHERE user_id = ?').all(req.user.id);
-  const price = PRICES[devices.length] || PRICES[1];
+  const effectiveCount = Math.max(devices.length, user.max_devices || 0);
+  const price = PRICES[effectiveCount] || PRICES[1];
   const referral_count = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ?').get(req.user.id).cnt;
   const referral_paid = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ? AND referral_rewarded = 1').get(req.user.id).cnt;
   res.json({ ...user, devices, device_count: devices.length, price, referral_count, referral_paid });
@@ -404,6 +406,10 @@ app.post('/api/devices', auth, async (req, res) => {
   }
 
   const newCount = deviceCount + 1;
+
+  // Фиксируем максимум устройств за период
+  db.prepare('UPDATE users SET max_devices = MAX(max_devices, ?) WHERE id = ?').run(newCount, req.user.id);
+
   res.json({ success: true, device: deviceData, device_count: newCount, price: PRICES[newCount] || 650 });
 });
 
@@ -497,6 +503,13 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   }
 
   db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
+
+  // Сбрасываем max_devices при продлении
+  if (h > 0) {
+    const currentCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(user.id).cnt;
+    db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentCount, user.id);
+  }
+
   res.json({ success: true, subscription_ends: new_ends });
 });
 
@@ -566,6 +579,10 @@ app.post('/api/payment/webhook', async (req, res) => {
     const base = Math.max(user.subscription_ends || now, now);
     const new_ends = base + 30 * 24 * 3600;
     db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, userId);
+
+    // Сбрасываем max_devices — новый период начинается
+    const currentDeviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(userId).cnt;
+    db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentDeviceCount, userId);
 
     if (wasExpired) {
       db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
