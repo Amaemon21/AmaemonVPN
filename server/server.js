@@ -7,7 +7,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 
-require('dotenv').config();
+require('dotenv').config({ path: '/var/www/amaemonvpn/server/.env' });
 
 const app = express();
 app.use(express.json());
@@ -43,7 +43,7 @@ PostDown = iptables -D FORWARD -i awg0 -j ACCEPT; iptables -D FORWARD -o awg0 -j
 
 // ── VLESS+Reality параметры ──
 const SERVER_IP = process.env.SERVER_IP || '31.172.77.46';
-const SERVER_PORT = process.env.SERVER_PORT || '8443';
+const SERVER_PORT = process.env.SERVER_PORT || '443';
 const REALITY_PUBLIC_KEY = process.env.REALITY_PUBLIC_KEY || '';
 const REALITY_SHORT_ID = process.env.REALITY_SHORT_ID || '';
 const REALITY_SNI = process.env.REALITY_SNI || 'www.microsoft.com';
