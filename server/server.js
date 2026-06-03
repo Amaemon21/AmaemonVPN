@@ -480,7 +480,19 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true, subscription_ends: new_ends });
 });
 
-// ── Админ: удалить пользователя ──
+// ── Админ: удалить устройство пользователя ──
+app.delete('/api/admin/devices/:id', auth, adminOnly, (req, res) => {
+  const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id);
+  if (!device) return res.status(404).json({ error: 'Device not found' });
+
+  deactivateDevice(device);
+  if (device.protocol === 'amnezia') {
+    try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
+  }
+
+  db.prepare('DELETE FROM devices WHERE id = ?').run(device.id);
+  res.json({ success: true });
+});
 app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
