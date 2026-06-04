@@ -7,7 +7,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 
-require('dotenv').config({ path: '/var/www/amaemonvpn/server/.env', override: false });
+require('dotenv').config();
 
 const app = express();
 app.use(express.json());
@@ -190,7 +190,7 @@ function readXrayConfig() {
 function writeXrayConfig(cfg) {
   fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(cfg, null, 2));
   try {
-    execSync('sudo systemctl restart xray', { timeout: 5000 });
+    execSync('sudo systemctl reload xray', { timeout: 5000 });
   } catch(e) {
     console.error('xray reload error:', e.message);
   }
@@ -556,7 +556,7 @@ app.post('/api/payment/create', auth, async (req, res) => {
       amount: { value: price.toFixed(2), currency: 'RUB' },
       confirmation: { type: 'redirect', return_url: `${SITE_URL}/cabinet` },
       capture: true,
-      description: `VPN 30 дней, ${deviceCount} устр. — ${user.email}`,
+      description: `Amaemon Proxy 30 дней, ${deviceCount} устр. — ${user.email}`,
       metadata: { user_id: String(user.id) }
     });
     res.json({ confirmation_url: payment.confirmation.confirmation_url });

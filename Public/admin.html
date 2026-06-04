@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Админ — HappVPN</title>
+  <title>Админ — Amaemon</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/png" href="/img/favicon.png">
   <style>
@@ -60,7 +60,7 @@
 <body>
 
 <nav>
-  <div class="logo"><span class="logo-dot"></span>HappVPN</div>
+  <div class="logo"><span class="logo-dot"></span>Amaemon</div>
   <div class="nav-links">
     <a href="/cabinet">Кабинет</a>
     <button class="btn-outline" style="font-size:13px; padding:0.4rem 1rem;" onclick="logout()">Выйти</button>
@@ -394,7 +394,7 @@
   }
 
   async function deleteUser(userId, email) {
-    if (!confirm(`Удалить пользователя ${email}?\n\nЭто удалит аккаунт, все устройства и отзовёт доступ к VPN.`)) return;
+    if (!confirm(`Удалить пользователя ${email}?\n\nЭто удалит аккаунт, все устройства и отзовёт доступ к сервису.`)) return;
     try {
       const res = await fetch('/api/admin/users/' + userId, {
         method: 'DELETE',
