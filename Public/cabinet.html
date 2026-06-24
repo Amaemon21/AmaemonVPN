@@ -159,16 +159,16 @@
           <span class="p-per" id="pp-per-3">190 ₽/мес</span>
         </button>
         <button class="period-btn" data-months="6" onclick="selectPeriod(6)">
-          <div class="p-badge">−6%</div>
+          <div class="p-badge">−10%</div>
           <span class="p-label">6 месяцев</span>
-          <span class="p-price" id="pp-6">1128 ₽</span>
-          <span class="p-per" id="pp-per-6">188 ₽/мес</span>
+          <span class="p-price" id="pp-6">1080 ₽</span>
+          <span class="p-per" id="pp-per-6">180 ₽/мес</span>
         </button>
         <button class="period-btn" data-months="12" onclick="selectPeriod(12)">
-          <div class="p-badge">−10%</div>
+          <div class="p-badge">−15%</div>
           <span class="p-label">12 месяцев</span>
-          <span class="p-price" id="pp-12">2160 ₽</span>
-          <span class="p-per" id="pp-per-12">180 ₽/мес</span>
+          <span class="p-price" id="pp-12">2040 ₽</span>
+          <span class="p-per" id="pp-per-12">170 ₽/мес</span>
         </button>
       </div>
 
@@ -344,8 +344,8 @@
   const PERIODS_CLIENT = {
     1:  { months: 1,  discount: 0,    label: '1 месяц'   },
     3:  { months: 3,  discount: 0.05, label: '3 месяца'  },
-    6:  { months: 6,  discount: 0.06, label: '6 месяцев' },
-    12: { months: 12, discount: 0.10, label: '12 месяцев' },
+    6:  { months: 6,  discount: 0.10, label: '6 месяцев' },
+    12: { months: 12, discount: 0.15, label: '12 месяцев' },
   };
   const MAX_DEVICES = 4;
   const token = localStorage.getItem('token');

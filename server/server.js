@@ -24,8 +24,8 @@ const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
 const PERIODS = {
   1:  { months: 1,  discount: 0,    label: '1 месяц'  },
   3:  { months: 3,  discount: 0.05, label: '3 месяца' },
-  6:  { months: 6,  discount: 0.06, label: '6 месяцев' },
-  12: { months: 12, discount: 0.10, label: '12 месяцев' },
+  6:  { months: 6,  discount: 0.10, label: '6 месяцев' },
+  12: { months: 12, discount: 0.15, label: '12 месяцев' },
 };
 
 function calcPrice(deviceCount, months) {
