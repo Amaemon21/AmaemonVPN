@@ -20,6 +20,21 @@ const SITE_URL = 'https://amaemonvpn.ru';
 const MAX_DEVICES = 4;
 const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
 
+// ── Тарифы по периодам (месяц → скидка) ──
+const PERIODS = {
+  1:  { months: 1,  discount: 0,    label: '1 месяц'  },
+  3:  { months: 3,  discount: 0.05, label: '3 месяца' },
+  6:  { months: 6,  discount: 0.06, label: '6 месяцев' },
+  12: { months: 12, discount: 0.10, label: '12 месяцев' },
+};
+
+function calcPrice(deviceCount, months) {
+  const baseMonthly = PRICES[Math.max(deviceCount, 1)] || PRICES[1];
+  const period = PERIODS[months] || PERIODS[1];
+  const total = baseMonthly * period.months * (1 - period.discount);
+  return Math.round(total);
+}
+
 // ── AmneziaWG параметры ──
 const SCRIPT = '/etc/amnezia/amneziawg/add_client.sh';
 const WG_INTERFACE_CONF = '/etc/amnezia/amneziawg/awg0.conf';
@@ -314,9 +329,8 @@ app.post('/api/register', async (req, res) => {
 
   const password_hash = await bcrypt.hash(password, 10);
   const free_ends = Math.floor(Date.now() / 1000) + 3 * 60 * 60;
-  const referral_code = crypto.randomBytes(5).toString('hex'); // 10-символьный код
+  const referral_code = crypto.randomBytes(5).toString('hex');
 
-  // Ищем пригласившего по реф. коду
   let referred_by = null;
   if (ref) {
     const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(ref);
@@ -347,10 +361,17 @@ app.get('/api/me', auth, (req, res) => {
   const user = db.prepare('SELECT id, email, full_name, subscription_ends, max_devices, referral_code, created_at FROM users WHERE id = ?').get(req.user.id);
   const devices = db.prepare('SELECT id, name, protocol, download_token, paused, created_at FROM devices WHERE user_id = ?').all(req.user.id);
   const effectiveCount = Math.max(devices.length, user.max_devices || 0);
-  const price = PRICES[effectiveCount] || PRICES[1];
+  const basePrice = PRICES[effectiveCount] || PRICES[1];
   const referral_count = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ?').get(req.user.id).cnt;
   const referral_paid = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ? AND referral_rewarded = 1').get(req.user.id).cnt;
-  res.json({ ...user, devices, device_count: devices.length, price, referral_count, referral_paid });
+
+  // Считаем цены для всех периодов
+  const period_prices = {};
+  Object.keys(PERIODS).forEach(m => {
+    period_prices[m] = calcPrice(effectiveCount, parseInt(m));
+  });
+
+  res.json({ ...user, devices, device_count: devices.length, price: basePrice, period_prices, referral_count, referral_paid });
 });
 
 // ── Устройства: добавить ──
@@ -406,8 +427,6 @@ app.post('/api/devices', auth, async (req, res) => {
   }
 
   const newCount = deviceCount + 1;
-
-  // Фиксируем максимум устройств за период
   db.prepare('UPDATE users SET max_devices = MAX(max_devices, ?) WHERE id = ?').run(newCount, req.user.id);
 
   res.json({ success: true, device: deviceData, device_count: newCount, price: PRICES[newCount] || 650 });
@@ -450,6 +469,75 @@ app.get('/link/:token', (req, res) => {
   res.json({ link, name: device.name });
 });
 
+// ── Создать платёж ──
+app.post('/api/payment/create', auth, async (req, res) => {
+  const { months } = req.body;
+  const period = PERIODS[months] || PERIODS[1];
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
+  const price = calcPrice(deviceCount, period.months);
+
+  try {
+    const payment = await yooRequest('POST', 'payments', {
+      amount: { value: price.toFixed(2), currency: 'RUB' },
+      confirmation: { type: 'redirect', return_url: `${SITE_URL}/cabinet` },
+      capture: true,
+      description: `Amaemon ${period.label}, ${Math.max(deviceCount, 1)} устр. — ${user.email}`,
+      metadata: { user_id: String(user.id), months: String(period.months) }
+    });
+    res.json({ confirmation_url: payment.confirmation.confirmation_url });
+  } catch(e) {
+    res.status(500).json({ error: 'Ошибка создания платежа' });
+  }
+});
+
+// ── Webhook от ЮКассы ──
+app.post('/api/payment/webhook', async (req, res) => {
+  const { event, object } = req.body;
+  if (event === 'payment.succeeded') {
+    const userId = parseInt(object.metadata?.user_id);
+    const months = parseInt(object.metadata?.months) || 1;
+    if (!userId) return res.sendStatus(200);
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!user) return res.sendStatus(200);
+
+    const now = Math.floor(Date.now() / 1000);
+    const wasExpired = user.subscription_ends < now;
+    const base = Math.max(user.subscription_ends || now, now);
+    const new_ends = base + months * 30 * 24 * 3600;
+    db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, userId);
+
+    const currentDeviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(userId).cnt;
+    db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentDeviceCount, userId);
+
+    if (wasExpired) {
+      db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
+      const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
+      devices.forEach(d => activateDevice(d, user.email));
+    }
+
+    // Реферальный бонус
+    if (user.referred_by && !user.referral_rewarded) {
+      const referrer = db.prepare('SELECT * FROM users WHERE id = ?').get(user.referred_by);
+      if (referrer) {
+        const bonus = REFERRAL_BONUS_DAYS * 24 * 3600;
+        const referrerBase = Math.max(referrer.subscription_ends || now, now);
+        db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?')
+          .run(referrerBase + bonus, referrer.id);
+        db.prepare('UPDATE users SET referral_rewarded = 1 WHERE id = ?').run(userId);
+        console.log(`Referral bonus +${REFERRAL_BONUS_DAYS}d to ${referrer.email}`);
+      }
+    }
+
+    console.log(`Payment succeeded for ${user.email}, +${months} months`);
+  }
+  res.sendStatus(200);
+});
+
 // ── Админ: все пользователи ──
 app.get('/api/admin/users', auth, adminOnly, (req, res) => {
   const users = db.prepare('SELECT id, email, full_name, subscription_ends, created_at FROM users ORDER BY created_at DESC').all();
@@ -479,10 +567,9 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
 
   const now = Math.floor(Date.now() / 1000);
   const h = hours || 720;
-
   let new_ends;
+
   if (h > 0) {
-    // Продление — от текущего конца или от сейчас
     const wasExpired = user.subscription_ends < now;
     const base = Math.max(user.subscription_ends || now, now);
     new_ends = base + h * 3600;
@@ -492,9 +579,7 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
       devices.forEach(d => activateDevice(d, user.email));
     }
   } else {
-    // Вычитание — от текущего конца
     new_ends = Math.max((user.subscription_ends || now) + h * 3600, 0);
-    // Если после вычитания подписка истекла — приостанавливаем устройства
     if (new_ends < now) {
       const devices = db.prepare('SELECT * FROM devices WHERE user_id = ? AND paused = 0').all(user.id);
       devices.forEach(d => deactivateDevice(d));
@@ -504,7 +589,6 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
 
   db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, user.id);
 
-  // Сбрасываем max_devices при продлении
   if (h > 0) {
     const currentCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(user.id).cnt;
     db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentCount, user.id);
@@ -513,23 +597,22 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true, subscription_ends: new_ends });
 });
 
-// ── Админ: удалить устройство пользователя ──
+// ── Админ: удалить устройство ──
 app.delete('/api/admin/devices/:id', auth, adminOnly, (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id);
   if (!device) return res.status(404).json({ error: 'Device not found' });
-
   deactivateDevice(device);
   if (device.protocol === 'amnezia') {
     try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
   }
-
   db.prepare('DELETE FROM devices WHERE id = ?').run(device.id);
   res.json({ success: true });
 });
+
+// ── Админ: удалить пользователя ──
 app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-
   const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
   devices.forEach(d => {
     deactivateDevice(d);
@@ -537,89 +620,20 @@ app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
       try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${d.client_name}`); } catch {}
     }
   });
-
   db.prepare('DELETE FROM devices WHERE user_id = ?').run(user.id);
   db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
   res.json({ success: true });
-});
-
-// ── Создать платёж ──
-app.post('/api/payment/create', auth, async (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
-  const price = PRICES[Math.max(deviceCount, 1)] || 200;
-
-  try {
-    const payment = await yooRequest('POST', 'payments', {
-      amount: { value: price.toFixed(2), currency: 'RUB' },
-      confirmation: { type: 'redirect', return_url: `${SITE_URL}/cabinet` },
-      capture: true,
-      description: `Amaemon Proxy 30 дней, ${deviceCount} устр. — ${user.email}`,
-      metadata: { user_id: String(user.id) }
-    });
-    res.json({ confirmation_url: payment.confirmation.confirmation_url });
-  } catch(e) {
-    res.status(500).json({ error: 'Ошибка создания платежа' });
-  }
-});
-
-// ── Webhook от ЮКассы ──
-app.post('/api/payment/webhook', async (req, res) => {
-  const { event, object } = req.body;
-  if (event === 'payment.succeeded') {
-    const userId = parseInt(object.metadata?.user_id);
-    if (!userId) return res.sendStatus(200);
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!user) return res.sendStatus(200);
-
-    const now = Math.floor(Date.now() / 1000);
-    const wasExpired = user.subscription_ends < now;
-    const base = Math.max(user.subscription_ends || now, now);
-    const new_ends = base + 30 * 24 * 3600;
-    db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, userId);
-
-    // Сбрасываем max_devices — новый период начинается
-    const currentDeviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(userId).cnt;
-    db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentDeviceCount, userId);
-
-    if (wasExpired) {
-      db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
-      const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
-      devices.forEach(d => activateDevice(d, user.email));
-    }
-
-    // Реферальный бонус — только при первой оплате и если не был начислен
-    if (user.referred_by && !user.referral_rewarded) {
-      const referrer = db.prepare('SELECT * FROM users WHERE id = ?').get(user.referred_by);
-      if (referrer) {
-        const bonus = REFERRAL_BONUS_DAYS * 24 * 3600;
-        const referrerBase = Math.max(referrer.subscription_ends || now, now);
-        db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?')
-          .run(referrerBase + bonus, referrer.id);
-        db.prepare('UPDATE users SET referral_rewarded = 1 WHERE id = ?').run(userId);
-        console.log(`Referral bonus +${REFERRAL_BONUS_DAYS}d to ${referrer.email} for inviting ${user.email}`);
-      }
-    }
-
-    console.log(`Payment succeeded for ${user.email}`);
-  }
-  res.sendStatus(200);
 });
 
 // ── Статистика ──
 app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
   try {
     const now = Math.floor(Date.now() / 1000);
-
-    // Xray stats
     const xrayActive = db.prepare(`
       SELECT COUNT(*) as cnt FROM devices d JOIN users u ON u.id = d.user_id
       WHERE u.subscription_ends > ? AND d.paused = 0 AND d.protocol = 'vless'
     `).get(now).cnt;
 
-    // WG stats
     let wgPeers = {};
     try {
       const output = execSync('sudo awg show awg0 dump').toString();

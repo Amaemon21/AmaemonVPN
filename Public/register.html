@@ -6,6 +6,33 @@
   <title>Регистрация — Amaemon</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" type="image/png" href="/img/favicon.png">
+  <style>
+    .consent-wrap {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      margin-top: 1rem;
+      margin-bottom: 1.1rem;
+    }
+    .consent-wrap input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      min-width: 16px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .consent-wrap label {
+      font-size: 12px;
+      color: var(--muted2);
+      line-height: 1.6;
+      cursor: pointer;
+    }
+    .consent-wrap label a {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
 
@@ -40,6 +67,15 @@
       <label>Повторите пароль <span style="color:var(--red)">*</span></label>
       <input type="password" id="password2" placeholder="••••••••" oninput="validatePasswords()">
       <div id="pass-hint" style="font-size:12px; margin-top:0.3rem; display:none;"></div>
+    </div>
+
+    <div class="consent-wrap">
+      <input type="checkbox" id="consent" name="consent">
+      <label for="consent">
+        Я ознакомился(-ась) и согласен(-на) с
+        <a href="/privacy" target="_blank">Политикой обработки персональных данных</a>
+        и даю согласие на обработку моих персональных данных в соответствии с ФЗ-152
+      </label>
     </div>
 
     <button class="btn btn-full" id="btn-register" onclick="register()">Создать аккаунт</button>
@@ -77,6 +113,7 @@
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
     const password2 = document.getElementById('password2').value;
+    const consent = document.getElementById('consent').checked;
 
     hideError();
     if (!full_name) return showError('Введите ФИО');
@@ -85,11 +122,11 @@
     if (!password) return showError('Введите пароль');
     if (password.length < 6) return showError('Пароль минимум 6 символов');
     if (password !== password2) return showError('Пароли не совпадают');
+    if (!consent) return showError('Необходимо согласие на обработку персональных данных');
 
     btn.disabled = true;
     btn.textContent = 'Создаём аккаунт...';
 
-    // Берём реферальный код из URL если есть
     const ref = new URLSearchParams(window.location.search).get('ref') || null;
 
     try {

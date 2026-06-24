@@ -14,7 +14,6 @@
     .user-info-row:last-child { border-bottom: none; }
     .user-info-label { color: var(--muted2); }
 
-    /* Protocol selector */
     .proto-select { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
     .proto-btn {
       flex: 1; padding: 0.55rem 0.5rem; border-radius: 9px; border: 1px solid var(--border);
@@ -105,14 +104,43 @@
   </div>
 
   <div class="cabinet-grid">
+
+    <!-- ── Подписка + выбор периода ── -->
     <div class="cabinet-card">
       <h4>Подписка</h4>
       <div class="countdown active" id="countdown">—</div>
       <div class="stat-sub" id="ends-at"></div>
-      <button id="pay-btn" class="btn" style="width:100%; margin-top:1rem; padding:0.8rem; font-size:15px;" onclick="pay()">
-        Оплатить <span id="pay-price">200</span> ₽ / 30 дней
+
+      <div class="period-grid" id="period-grid">
+        <button class="period-btn selected" data-months="1" onclick="selectPeriod(1)">
+          <span class="p-label">1 месяц</span>
+          <span class="p-price" id="pp-1">200 ₽</span>
+          <span class="p-per" id="pp-per-1">200 ₽/мес</span>
+        </button>
+        <button class="period-btn" data-months="3" onclick="selectPeriod(3)">
+          <div class="p-badge">−5%</div>
+          <span class="p-label">3 месяца</span>
+          <span class="p-price" id="pp-3">570 ₽</span>
+          <span class="p-per" id="pp-per-3">190 ₽/мес</span>
+        </button>
+        <button class="period-btn" data-months="6" onclick="selectPeriod(6)">
+          <div class="p-badge">−6%</div>
+          <span class="p-label">6 месяцев</span>
+          <span class="p-price" id="pp-6">1128 ₽</span>
+          <span class="p-per" id="pp-per-6">188 ₽/мес</span>
+        </button>
+        <button class="period-btn" data-months="12" onclick="selectPeriod(12)">
+          <div class="p-badge">−10%</div>
+          <span class="p-label">12 месяцев</span>
+          <span class="p-price" id="pp-12">2160 ₽</span>
+          <span class="p-per" id="pp-per-12">180 ₽/мес</span>
+        </button>
+      </div>
+
+      <button id="pay-btn" class="btn" style="width:100%; padding:0.8rem; font-size:15px;" onclick="pay()">
+        Оплатить <span id="pay-label">200 ₽ / 1 месяц</span>
       </button>
-      <div class="price-hint">Цена зависит от количества устройств</div>
+
       <a href="https://t.me/amaemonvpn" target="_blank" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.9rem; font-size:13px; color:var(--accent); text-decoration:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex-shrink:0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Поддержка: @amaemonvpn
@@ -161,7 +189,6 @@
       <h4>Устройства <span id="devices-count" style="color:var(--muted2); font-weight:400; font-size:12px;"></span></h4>
       <div id="devices-list"></div>
       <div id="add-device-wrap">
-        <!-- Выбор протокола -->
         <div class="proto-select" id="proto-select">
           <button class="proto-btn active" id="proto-amnezia" onclick="selectProto('amnezia')">
             <span class="proto-name">Amnezia</span>
@@ -187,7 +214,6 @@
   <div class="cabinet-grid">
     <div class="cabinet-card">
       <h4>Инструкция</h4>
-
       <div class="section-tabs">
         <button class="tab-btn active" onclick="showTab('amnezia-guide', this)">Amnezia</button>
         <button class="tab-btn" onclick="showTab('happ-guide', this)">Happ</button>
@@ -245,14 +271,13 @@
     </div>
   </div>
 
-  <!-- Оплата и поддержка -->
   <div class="cabinet-grid">
     <div class="cabinet-card">
       <h4>Как работает оплата</h4>
       <div style="font-size:14px; color:var(--muted2); line-height:1.8;">
         <div style="display:flex; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--border);">
           <span style="color:var(--accent); font-weight:600; min-width:20px;">1.</span>
-          <span>Нажми «Оплатить» — откроется страница оплаты ЮКассы</span>
+          <span>Выбери период и нажми «Оплатить» — откроется страница ЮКассы</span>
         </div>
         <div style="display:flex; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--border);">
           <span style="color:var(--accent); font-weight:600; min-width:20px;">2.</span>
@@ -260,11 +285,11 @@
         </div>
         <div style="display:flex; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--border);">
           <span style="color:var(--accent); font-weight:600; min-width:20px;">3.</span>
-          <span>После оплаты тебя вернёт обратно в кабинет — подписка активируется автоматически</span>
+          <span>После оплаты тебя вернёт обратно — подписка активируется автоматически</span>
         </div>
         <div style="display:flex; gap:0.6rem; padding:0.5rem 0;">
           <span style="color:var(--accent); font-weight:600; min-width:20px;">4.</span>
-          <span>Цена зависит от количества устройств которые были у тебя в этом периоде</span>
+          <span>Цена зависит от количества устройств в периоде</span>
         </div>
       </div>
       <div style="margin-top:1.2rem; padding:0.9rem 1rem; background:var(--bg3); border-radius:10px; border:1px solid var(--border); display:flex; align-items:center; gap:0.8rem;">
@@ -280,7 +305,13 @@
 </div>
 
 <script>
-  const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
+  const PRICES_BASE = { 1: 200, 2: 350, 3: 500, 4: 650 };
+  const PERIODS_CLIENT = {
+    1:  { months: 1,  discount: 0,    label: '1 месяц'   },
+    3:  { months: 3,  discount: 0.05, label: '3 месяца'  },
+    6:  { months: 6,  discount: 0.06, label: '6 месяцев' },
+    12: { months: 12, discount: 0.10, label: '12 месяцев' },
+  };
   const MAX_DEVICES = 4;
   const token = localStorage.getItem('token');
   if (!token) window.location.href = '/login';
@@ -288,7 +319,43 @@
   let currentUser = null;
   let countdownInterval;
   let selectedProto = 'amnezia';
+  let selectedMonths = 1;
 
+  // ── Периоды оплаты ──
+  function calcClientPrice(baseMonthly, months) {
+    const p = PERIODS_CLIENT[months];
+    return Math.round(baseMonthly * p.months * (1 - p.discount));
+  }
+
+  function selectPeriod(months) {
+    selectedMonths = months;
+    document.querySelectorAll('.period-btn').forEach(b => {
+      b.classList.toggle('selected', parseInt(b.dataset.months) === months);
+    });
+    updatePayButton();
+  }
+
+  function updatePeriodPrices(baseMonthly) {
+    Object.keys(PERIODS_CLIENT).forEach(m => {
+      const total = calcClientPrice(baseMonthly, parseInt(m));
+      const perMonth = Math.round(total / parseInt(m));
+      const el = document.getElementById('pp-' + m);
+      const elPer = document.getElementById('pp-per-' + m);
+      if (el) el.textContent = total + ' ₽';
+      if (elPer) elPer.textContent = perMonth + ' ₽/мес';
+    });
+    updatePayButton();
+  }
+
+  function updatePayButton() {
+    const baseMonthly = currentUser?.price || 200;
+    const total = calcClientPrice(baseMonthly, selectedMonths);
+    const label = PERIODS_CLIENT[selectedMonths].label;
+    const el = document.getElementById('pay-label');
+    if (el) el.textContent = `${total} ₽ / ${label}`;
+  }
+
+  // ── Протокол ──
   function selectProto(proto) {
     selectedProto = proto;
     document.getElementById('proto-amnezia').classList.toggle('active', proto === 'amnezia');
@@ -319,10 +386,9 @@
     document.getElementById('info-name').textContent = user.full_name;
     document.getElementById('info-email').textContent = user.email;
     document.getElementById('info-created').textContent = formatDate(user.created_at);
-    document.getElementById('ends-at').textContent = user.subscription_ends > 0 ? 'до ' + formatDateTime(user.subscription_ends) : '';
-    document.getElementById('pay-price').textContent = user.price || 200;
+    document.getElementById('ends-at').textContent = user.subscription_ends > 0
+      ? 'до ' + formatDateTime(user.subscription_ends) : '';
 
-    // Реферальная ссылка
     if (user.referral_code) {
       document.getElementById('ref-link').value = window.location.origin + '/register?ref=' + user.referral_code;
       document.getElementById('ref-count').textContent = user.referral_count || 0;
@@ -330,10 +396,12 @@
       document.getElementById('ref-bonus').textContent = '+' + ((user.referral_paid || 0) * 7) + 'д';
     }
 
+    updatePeriodPrices(user.price || 200);
     renderDevices(user.devices || []);
     startCountdown(user.subscription_ends * 1000);
   }
 
+  // ── Реферальная ссылка ──
   function copyRefLink() {
     const input = document.getElementById('ref-link');
     const btn = document.getElementById('ref-copy-btn');
@@ -360,10 +428,9 @@
     setTimeout(() => { btn.textContent = 'Скопировать'; btn.classList.remove('copied'); }, 2500);
   }
 
-  // Кэш ссылок чтобы не делать fetch каждый раз
+  // ── Устройства ──
   const linkCache = {};
 
-  // Предзагружаем ссылки для всех vless устройств
   async function preloadLinks(devices) {
     for (const d of devices) {
       if (d.protocol === 'vless' && !linkCache[d.id]) {
@@ -406,36 +473,29 @@
         </div>
       `).join('');
     }
-    // Предзагружаем ссылки в фоне
-    preloadLinks(devices);
 
+    preloadLinks(devices);
     addWrap.style.display = devices.length >= MAX_DEVICES ? 'none' : 'block';
 
     const hint = document.getElementById('device-price-hint');
     if (devices.length < MAX_DEVICES) {
-      const nextPrice = PRICES[devices.length + 1];
+      const nextPrice = PRICES_BASE[devices.length + 1];
       hint.textContent = devices.length === 0
         ? 'Первое устройство — 200 ₽/мес'
         : `При добавлении устройства цена станет ${nextPrice} ₽/мес`;
     }
   }
 
-  // Safari-совместимое копирование — ссылка уже в кэше, копируем синхронно
   function copyLinkCached(deviceId) {
     const btn = document.getElementById('copy-btn-' + deviceId);
     const link = linkCache[deviceId];
-
     if (!link) {
       btn.textContent = 'Загрузка...';
-      // Если кэш пустой — загружаем и сразу копируем
       const device = currentUser.devices.find(d => d.id === deviceId);
       if (!device) return;
       fetch('/link/' + device.download_token)
         .then(r => r.json())
-        .then(data => {
-          linkCache[deviceId] = data.link;
-          doCopy(btn, data.link);
-        })
+        .then(data => { linkCache[deviceId] = data.link; doCopy(btn, data.link); })
         .catch(() => { btn.textContent = 'Скопировать ссылку'; alert('Ошибка получения ссылки'); });
       return;
     }
@@ -443,33 +503,19 @@
   }
 
   function doCopy(btn, text) {
-    // Метод 1: современный Clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        showCopied(btn);
-      }).catch(() => fallbackCopy(btn, text));
+      navigator.clipboard.writeText(text).then(() => showCopied(btn)).catch(() => fallbackCopy(btn, text));
     } else {
       fallbackCopy(btn, text);
     }
   }
 
-  // Метод 2: textarea fallback для Safari и старых браузеров
   function fallbackCopy(btn, text) {
     const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    ta.style.top = '-9999px';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try {
-      document.execCommand('copy');
-      showCopied(btn);
-    } catch {
-      // Метод 3: показываем ссылку для ручного копирования
-      prompt('Скопируйте ссылку вручную (Ctrl+C / Cmd+C):', text);
-    }
+    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.style.top = '-9999px';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); showCopied(btn); }
+    catch { prompt('Скопируйте ссылку вручную (Ctrl+C / Cmd+C):', text); }
     document.body.removeChild(ta);
   }
 
@@ -483,11 +529,8 @@
     const input = document.getElementById('device-name-input');
     const name = input.value.trim();
     if (!name) { alert('Введите название устройства'); return; }
-
     const btn = document.getElementById('add-btn');
-    btn.disabled = true;
-    btn.textContent = 'Создаём...';
-
+    btn.disabled = true; btn.textContent = 'Создаём...';
     try {
       const res = await fetch('/api/devices', {
         method: 'POST',
@@ -498,12 +541,8 @@
       if (!res.ok) { alert(data.error || 'Ошибка'); return; }
       input.value = '';
       await loadUser();
-    } catch {
-      alert('Ошибка соединения');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '+ Добавить';
-    }
+    } catch { alert('Ошибка соединения'); }
+    finally { btn.disabled = false; btn.textContent = '+ Добавить'; }
   }
 
   async function removeDevice(deviceId) {
@@ -519,6 +558,7 @@
     } catch { alert('Ошибка соединения'); }
   }
 
+  // ── Оплата ──
   async function pay() {
     const btn = document.getElementById('pay-btn');
     btn.disabled = true;
@@ -526,7 +566,8 @@
     try {
       const res = await fetch('/api/payment/create', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token }
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ months: selectedMonths })
       });
       const data = await res.json();
       if (data.confirmation_url) {
@@ -537,11 +578,11 @@
     } catch { alert('Ошибка соединения'); }
     finally {
       btn.disabled = false;
-      const price = currentUser?.price || 200;
-      btn.textContent = `Оплатить ${price} ₽ / 30 дней`;
+      updatePayButton();
     }
   }
 
+  // ── Countdown ──
   function startCountdown(endsAt) {
     if (countdownInterval) clearInterval(countdownInterval);
     function tick() {
