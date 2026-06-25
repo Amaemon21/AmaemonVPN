@@ -322,11 +322,22 @@ app.get('/download/:token', (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE download_token = ?').get(req.params.token);
   if (!device) return res.status(404).send('Not found');
   if (!fs.existsSync(device.config_path)) return res.status(404).send('Config not found');
+
   const safeName = device.name.replace(/[^a-zA-Z0-9]/g, '_');
-  const prefix = device.protocol === 'amnezia2' ? 'amaemonvpn_v2' : 'amaemonvpn';
-  res.setHeader('Content-Disposition', `attachment; filename="${prefix}_${safeName}.conf"`);
-  res.setHeader('Content-Type', 'text/plain');
-  res.sendFile(device.config_path);
+
+  if (device.protocol === 'amnezia2') {
+    // Для V2 — подменяем endpoint на relay
+    let conf = fs.readFileSync(device.config_path, 'utf8');
+    conf = conf.replace(/Endpoint\s*=\s*[\d.]+:\d+/, 'Endpoint = 185.171.82.68:51820');
+    res.setHeader('Content-Disposition', `attachment; filename="amaemonvpn_v2_${safeName}.conf"`);
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(conf);
+  } else {
+    // Для обычной Amnezia — оригинальный конфиг
+    res.setHeader('Content-Disposition', `attachment; filename="amaemonvpn_${safeName}.conf"`);
+    res.setHeader('Content-Type', 'text/plain');
+    res.sendFile(device.config_path);
+  }
 });
 
 // ── Создать платёж ──
