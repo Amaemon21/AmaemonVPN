@@ -539,4 +539,4 @@ setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired();
 rebuildWgConfig();
 
-app.listen(3000, () => console.log('VPN API running on :3000'));
+app.listen(3000, () => console.log('VPN API running on :3000'));    
