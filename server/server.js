@@ -467,7 +467,7 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true, subscription_ends: new_ends });
 });
 
-// ── Админ: удалить устройство ──
+// ────── Админ: удалить устройство ──────
 app.delete('/api/admin/devices/:id', auth, adminOnly, (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id);
   if (!device) return res.status(404).json({ error: 'Device not found' });
@@ -477,7 +477,7 @@ app.delete('/api/admin/devices/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Админ: удалить пользователя ──
+// ────── Админ: удалить пользователя ──────
 app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -491,7 +491,7 @@ app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Статистика ──
+// ────── Статистика ──────
 app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
   try {
     const now = Math.floor(Date.now() / 1000);
@@ -516,7 +516,7 @@ app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
   }
 });
 
-// ── Проверка истекших подписок ──
+// ────── Проверка истекших подписок ──────
 function checkExpired() {
   const now = Math.floor(Date.now() / 1000);
   const expiredUsers = db.prepare(`
