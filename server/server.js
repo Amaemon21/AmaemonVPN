@@ -20,10 +20,10 @@ const SITE_URL = 'https://amaemonvpn.ru';
 const MAX_DEVICES = 4;
 const PRICES = { 1: 200, 2: 350, 3: 500, 4: 650 };
 
-// ── Тарифы по периодам (месяц → скидка) ──
+// ── Тарифы по периодам ──
 const PERIODS = {
-  1:  { months: 1,  discount: 0,    label: '1 месяц'  },
-  3:  { months: 3,  discount: 0.05, label: '3 месяца' },
+  1:  { months: 1,  discount: 0,    label: '1 месяц'   },
+  3:  { months: 3,  discount: 0.05, label: '3 месяца'  },
   6:  { months: 6,  discount: 0.10, label: '6 месяцев' },
   12: { months: 12, discount: 0.15, label: '12 месяцев' },
 };
@@ -31,13 +31,11 @@ const PERIODS = {
 function calcPrice(deviceCount, months) {
   const baseMonthly = PRICES[Math.max(deviceCount, 1)] || PRICES[1];
   const period = PERIODS[months] || PERIODS[1];
-  const total = baseMonthly * period.months * (1 - period.discount);
-  return Math.round(total);
+  return Math.round(baseMonthly * period.months * (1 - period.discount));
 }
 
 // ── AmneziaWG параметры ──
 const SCRIPT = '/etc/amnezia/amneziawg/add_client.sh';
-const WG_INTERFACE_CONF = '/etc/amnezia/amneziawg/awg0.conf';
 const WG_INTERFACE_HEADER = `[Interface]
 Address = 10.8.0.1/24
 ListenPort = 443
@@ -56,13 +54,6 @@ PostUp   = iptables -A FORWARD -i awg0 -j ACCEPT; iptables -A FORWARD -o awg0 -j
 PostDown = iptables -D FORWARD -i awg0 -j ACCEPT; iptables -D FORWARD -o awg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 `;
 
-// ── VLESS+Reality параметры ──
-const SERVER_IP = process.env.SERVER_IP || '31.172.77.46';
-const SERVER_PORT = process.env.SERVER_PORT || '8443';
-const REALITY_PUBLIC_KEY = process.env.REALITY_PUBLIC_KEY || '';
-const REALITY_SHORT_ID = process.env.REALITY_SHORT_ID || '';
-const REALITY_SNI = process.env.REALITY_SNI || 'www.microsoft.com';
-const XRAY_CONFIG_PATH = process.env.XRAY_CONFIG_PATH || '/usr/local/etc/xray/config.json';
 const REFERRAL_BONUS_DAYS = 7;
 
 // ── База данных ──
@@ -89,7 +80,6 @@ db.exec(`
     protocol       TEXT NOT NULL DEFAULT 'amnezia',
     client_name    TEXT UNIQUE,
     config_path    TEXT,
-    uuid           TEXT UNIQUE,
     download_token TEXT UNIQUE NOT NULL,
     paused         INTEGER DEFAULT 0,
     created_at     INTEGER DEFAULT (unixepoch()),
@@ -116,7 +106,7 @@ function adminOnly(req, res, next) {
 }
 
 // ════════════════════════════════
-// AMNEZIAWG
+// AMNEZIAWG (оба протокола используют один скрипт)
 // ════════════════════════════════
 
 function rebuildWgConfig() {
@@ -125,7 +115,7 @@ function rebuildWgConfig() {
     const activeDevices = db.prepare(`
       SELECT d.client_name, d.config_path FROM devices d
       JOIN users u ON u.id = d.user_id
-      WHERE u.subscription_ends > ? AND d.paused = 0 AND d.protocol = 'amnezia'
+      WHERE u.subscription_ends > ? AND d.paused = 0
     `).all(now);
 
     let conf = WG_INTERFACE_HEADER;
@@ -175,117 +165,12 @@ function removeWgPeer(clientName) {
   } catch(e) {}
 }
 
-// ════════════════════════════════
-// XRAY / VLESS+REALITY
-// ════════════════════════════════
-
-function buildVlessLink(uuid, label) {
-  const params = new URLSearchParams({
-    type: 'tcp',
-    security: 'reality',
-    pbk: REALITY_PUBLIC_KEY,
-    fp: 'chrome',
-    sni: REALITY_SNI,
-    sid: REALITY_SHORT_ID,
-    flow: 'xtls-rprx-vision'
-  });
-  const tag = encodeURIComponent(`VPN-${label}`);
-  return `vless://${uuid}@${SERVER_IP}:${SERVER_PORT}?${params.toString()}#${tag}`;
-}
-
-function readXrayConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(XRAY_CONFIG_PATH, 'utf8'));
-  } catch(e) {
-    console.error('readXrayConfig error:', e.message);
-    return null;
-  }
-}
-
-function writeXrayConfig(cfg) {
-  fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(cfg, null, 2));
-  try {
-    execSync('sudo systemctl reload xray', { timeout: 5000 });
-  } catch(e) {
-    console.error('xray reload error:', e.message);
-  }
-}
-
-function findVlessInbound(cfg) {
-  return cfg.inbounds.findIndex(i => i.protocol === 'vless');
-}
-
-function xrayAddUser(uuid, email) {
-  try {
-    const cfg = readXrayConfig();
-    if (!cfg) return false;
-    const idx = findVlessInbound(cfg);
-    if (idx === -1) return false;
-    const clients = cfg.inbounds[idx].settings.clients;
-    if (clients.find(c => c.id === uuid)) return true;
-    clients.push({ id: uuid, email, flow: 'xtls-rprx-vision' });
-    writeXrayConfig(cfg);
-    return true;
-  } catch(e) {
-    console.error('xrayAddUser error:', e.message);
-    return false;
-  }
-}
-
-function xrayRemoveUser(uuid) {
-  try {
-    const cfg = readXrayConfig();
-    if (!cfg) return;
-    const idx = findVlessInbound(cfg);
-    if (idx === -1) return;
-    cfg.inbounds[idx].settings.clients =
-      cfg.inbounds[idx].settings.clients.filter(c => c.id !== uuid);
-    writeXrayConfig(cfg);
-  } catch(e) {
-    console.error('xrayRemoveUser error:', e.message);
-  }
-}
-
-function rebuildXrayConfig() {
-  try {
-    const cfg = readXrayConfig();
-    if (!cfg) return;
-    const idx = findVlessInbound(cfg);
-    if (idx === -1) return;
-    const now = Math.floor(Date.now() / 1000);
-    const activeDevices = db.prepare(`
-      SELECT d.uuid, u.email FROM devices d
-      JOIN users u ON u.id = d.user_id
-      WHERE u.subscription_ends > ? AND d.paused = 0 AND d.protocol = 'vless'
-    `).all(now);
-    cfg.inbounds[idx].settings.clients = activeDevices.map(d => ({
-      id: d.uuid, email: d.email, flow: 'xtls-rprx-vision'
-    }));
-    writeXrayConfig(cfg);
-    console.log(`Xray config rebuilt: ${activeDevices.length} active clients`);
-  } catch(e) {
-    console.error('rebuildXrayConfig error:', e.message);
-  }
-}
-
-// ════════════════════════════════
-// ОБЩИЕ ФУНКЦИИ УПРАВЛЕНИЯ
-// ════════════════════════════════
-
-function activateDevice(device, userEmail) {
-  if (device.protocol === 'amnezia') {
-    addWgPeer(device.client_name, device.config_path);
-  } else {
-    xrayAddUser(device.uuid, userEmail);
-  }
+function activateDevice(device) {
+  addWgPeer(device.client_name, device.config_path);
 }
 
 function deactivateDevice(device) {
-  if (device.protocol === 'amnezia') {
-    removeWgPeer(device.client_name);
-  } else {
-    xrayRemoveUser(device.uuid);
-  }
+  removeWgPeer(device.client_name);
 }
 
 // ── ЮКасса ──
@@ -365,7 +250,6 @@ app.get('/api/me', auth, (req, res) => {
   const referral_count = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ?').get(req.user.id).cnt;
   const referral_paid = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE referred_by = ? AND referral_rewarded = 1').get(req.user.id).cnt;
 
-  // Считаем цены для всех периодов
   const period_prices = {};
   Object.keys(PERIODS).forEach(m => {
     period_prices[m] = calcPrice(effectiveCount, parseInt(m));
@@ -378,7 +262,7 @@ app.get('/api/me', auth, (req, res) => {
 app.post('/api/devices', auth, async (req, res) => {
   const { name, protocol } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Введите название устройства' });
-  if (!['amnezia', 'vless'].includes(protocol))
+  if (!['amnezia', 'amnezia2'].includes(protocol))
     return res.status(400).json({ error: 'Неверный протокол' });
 
   const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
@@ -391,45 +275,33 @@ app.post('/api/devices', auth, async (req, res) => {
   const isActive = user.subscription_ends > now;
   const paused = isActive ? 0 : 1;
 
-  let deviceId, deviceData;
-
-  if (protocol === 'amnezia') {
-    const client_name = 'u' + Date.now();
-    try {
-      execSync(`sudo ${SCRIPT} ${client_name}`, { timeout: 15000 });
-    } catch(e) {
-      return res.status(500).json({ error: 'Ошибка создания конфига AmneziaWG' });
-    }
-    const config_path = `/etc/amnezia/amneziawg/clients/${client_name}/${client_name}.conf`;
-    if (!fs.existsSync(config_path))
-      return res.status(500).json({ error: 'Конфиг не создан' });
-
-    const result = db.prepare(`
-      INSERT INTO devices (user_id, name, protocol, client_name, config_path, download_token, paused)
-      VALUES (?, ?, 'amnezia', ?, ?, ?, ?)
-    `).run(req.user.id, name.trim(), client_name, config_path, download_token, paused);
-
-    if (isActive) addWgPeer(client_name, config_path);
-    deviceId = result.lastInsertRowid;
-    deviceData = { id: deviceId, name: name.trim(), protocol: 'amnezia', download_token, paused };
-
-  } else {
-    const uuid = crypto.randomUUID();
-    const result = db.prepare(`
-      INSERT INTO devices (user_id, name, protocol, uuid, download_token, paused)
-      VALUES (?, ?, 'vless', ?, ?, ?)
-    `).run(req.user.id, name.trim(), uuid, download_token, paused);
-
-    if (isActive) xrayAddUser(uuid, user.email);
-    const vless_link = buildVlessLink(uuid, name.trim());
-    deviceId = result.lastInsertRowid;
-    deviceData = { id: deviceId, name: name.trim(), protocol: 'vless', download_token, paused, vless_link };
+  const client_name = 'u' + Date.now();
+  try {
+    execSync(`sudo ${SCRIPT} ${client_name}`, { timeout: 15000 });
+  } catch(e) {
+    return res.status(500).json({ error: 'Ошибка создания конфига AmneziaWG' });
   }
+
+  const config_path = `/etc/amnezia/amneziawg/clients/${client_name}/${client_name}.conf`;
+  if (!fs.existsSync(config_path))
+    return res.status(500).json({ error: 'Конфиг не создан' });
+
+  const result = db.prepare(`
+    INSERT INTO devices (user_id, name, protocol, client_name, config_path, download_token, paused)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(req.user.id, name.trim(), protocol, client_name, config_path, download_token, paused);
+
+  if (isActive) addWgPeer(client_name, config_path);
 
   const newCount = deviceCount + 1;
   db.prepare('UPDATE users SET max_devices = MAX(max_devices, ?) WHERE id = ?').run(newCount, req.user.id);
 
-  res.json({ success: true, device: deviceData, device_count: newCount, price: PRICES[newCount] || 650 });
+  res.json({
+    success: true,
+    device: { id: result.lastInsertRowid, name: name.trim(), protocol, download_token, paused },
+    device_count: newCount,
+    price: PRICES[newCount] || 650
+  });
 });
 
 // ── Устройства: удалить ──
@@ -438,35 +310,23 @@ app.delete('/api/devices/:id', auth, (req, res) => {
   if (!device) return res.status(404).json({ error: 'Устройство не найдено' });
 
   deactivateDevice(device);
-
-  if (device.protocol === 'amnezia') {
-    try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
-  }
+  try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
 
   db.prepare('DELETE FROM devices WHERE id = ?').run(device.id);
   const newCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(req.user.id).cnt;
   res.json({ success: true, device_count: newCount, price: PRICES[newCount] || 200 });
 });
 
-// ── Скачать конфиг (Amnezia) ──
+// ── Скачать конфиг ──
 app.get('/download/:token', (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE download_token = ?').get(req.params.token);
   if (!device) return res.status(404).send('Not found');
-  if (device.protocol !== 'amnezia') return res.status(400).send('Use /link/ for VLESS');
   if (!fs.existsSync(device.config_path)) return res.status(404).send('Config not found');
   const safeName = device.name.replace(/[^a-zA-Z0-9]/g, '_');
-  res.setHeader('Content-Disposition', `attachment; filename="amaeonvpn_${safeName}.conf"`);
+  const prefix = device.protocol === 'amnezia2' ? 'amaemonvpn_v2' : 'amaemonvpn';
+  res.setHeader('Content-Disposition', `attachment; filename="${prefix}_${safeName}.conf"`);
   res.setHeader('Content-Type', 'text/plain');
   res.sendFile(device.config_path);
-});
-
-// ── Получить VLESS-ссылку ──
-app.get('/link/:token', (req, res) => {
-  const device = db.prepare('SELECT * FROM devices WHERE download_token = ?').get(req.params.token);
-  if (!device) return res.status(404).json({ error: 'Not found' });
-  if (device.protocol !== 'vless') return res.status(400).json({ error: 'Use /download/ for Amnezia' });
-  const link = buildVlessLink(device.uuid, device.name);
-  res.json({ link, name: device.name });
 });
 
 // ── Создать платёж ──
@@ -517,10 +377,9 @@ app.post('/api/payment/webhook', async (req, res) => {
     if (wasExpired) {
       db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
       const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
-      devices.forEach(d => activateDevice(d, user.email));
+      devices.forEach(d => activateDevice(d));
     }
 
-    // Реферальный бонус
     if (user.referred_by && !user.referral_rewarded) {
       const referrer = db.prepare('SELECT * FROM users WHERE id = ?').get(user.referred_by);
       if (referrer) {
@@ -542,10 +401,10 @@ app.post('/api/payment/webhook', async (req, res) => {
 app.get('/api/admin/users', auth, adminOnly, (req, res) => {
   const users = db.prepare('SELECT id, email, full_name, subscription_ends, created_at FROM users ORDER BY created_at DESC').all();
   const result = users.map(u => {
-    const devices = db.prepare('SELECT id, name, protocol, client_name, config_path, uuid, download_token, paused, created_at FROM devices WHERE user_id = ?').all(u.id);
+    const devices = db.prepare('SELECT id, name, protocol, client_name, config_path, download_token, paused, created_at FROM devices WHERE user_id = ?').all(u.id);
     const devicesWithInfo = devices.map(d => {
       let vpn_ip = null;
-      if (d.protocol === 'amnezia' && d.config_path) {
+      if (d.config_path) {
         try {
           const conf = fs.readFileSync(d.config_path, 'utf8');
           const m = conf.match(/Address\s*=\s*(10\.8\.0\.\d+)/);
@@ -576,7 +435,7 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
     if (wasExpired) {
       db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(user.id);
       const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
-      devices.forEach(d => activateDevice(d, user.email));
+      devices.forEach(d => activateDevice(d));
     }
   } else {
     new_ends = Math.max((user.subscription_ends || now) + h * 3600, 0);
@@ -602,9 +461,7 @@ app.delete('/api/admin/devices/:id', auth, adminOnly, (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id);
   if (!device) return res.status(404).json({ error: 'Device not found' });
   deactivateDevice(device);
-  if (device.protocol === 'amnezia') {
-    try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
-  }
+  try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${device.client_name}`); } catch {}
   db.prepare('DELETE FROM devices WHERE id = ?').run(device.id);
   res.json({ success: true });
 });
@@ -616,9 +473,7 @@ app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
   const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(user.id);
   devices.forEach(d => {
     deactivateDevice(d);
-    if (d.protocol === 'amnezia') {
-      try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${d.client_name}`); } catch {}
-    }
+    try { execSync(`sudo rm -rf /etc/amnezia/amneziawg/clients/${d.client_name}`); } catch {}
   });
   db.prepare('DELETE FROM devices WHERE user_id = ?').run(user.id);
   db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
@@ -629,11 +484,6 @@ app.delete('/api/admin/users/:id', auth, adminOnly, (req, res) => {
 app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
   try {
     const now = Math.floor(Date.now() / 1000);
-    const xrayActive = db.prepare(`
-      SELECT COUNT(*) as cnt FROM devices d JOIN users u ON u.id = d.user_id
-      WHERE u.subscription_ends > ? AND d.paused = 0 AND d.protocol = 'vless'
-    `).get(now).cnt;
-
     let wgPeers = {};
     try {
       const output = execSync('sudo awg show awg0 dump').toString();
@@ -649,8 +499,7 @@ app.get('/api/admin/stats', auth, adminOnly, (req, res) => {
         };
       });
     } catch {}
-
-    res.json({ xray_active: xrayActive, wg_peers: wgPeers });
+    res.json({ wg_peers: wgPeers });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -669,7 +518,7 @@ function checkExpired() {
     const devices = db.prepare('SELECT * FROM devices WHERE user_id = ? AND paused = 0').all(u.id);
     devices.forEach(d => {
       deactivateDevice(d);
-      console.log(`Paused ${d.protocol} device ${d.id} for user ${u.email}`);
+      console.log(`Paused device ${d.id} for user ${u.email}`);
     });
     db.prepare('UPDATE devices SET paused = 1 WHERE user_id = ?').run(u.id);
   });
@@ -678,6 +527,5 @@ function checkExpired() {
 setInterval(checkExpired, 5 * 60 * 1000);
 checkExpired();
 rebuildWgConfig();
-rebuildXrayConfig();
 
 app.listen(3000, () => console.log('VPN API running on :3000'));

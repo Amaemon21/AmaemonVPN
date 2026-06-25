@@ -44,7 +44,7 @@
     .device-paused { font-size: 11px; color: var(--red); margin-left: 0.4rem; }
     .device-proto { font-size: 11px; margin-top: 2px; }
     .device-proto.amnezia { color: #7b61ff; }
-    .device-proto.vless { color: var(--accent); }
+    .device-proto.amnezia2 { color: #00d4ff; }
     .device-actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
 
     .btn-copy-link {
@@ -229,9 +229,9 @@
             <span class="proto-name">Amnezia</span>
             <span class="proto-sub">AmneziaWG</span>
           </button>
-          <button class="proto-btn" id="proto-vless" onclick="selectProto('vless')">
-            <span class="proto-name">Happ</span>
-            <span class="proto-sub">VLESS+Reality</span>
+          <button class="proto-btn" id="proto-amnezia2" onclick="selectProto('amnezia2')">
+            <span class="proto-name">Amnezia V2</span>
+            <span class="proto-sub">AmneziaWG</span>
           </button>
         </div>
         <div class="add-device-form">
@@ -251,7 +251,7 @@
       <h4>Инструкция</h4>
       <div class="section-tabs">
         <button class="tab-btn active" onclick="showTab('amnezia-guide', this)">Amnezia</button>
-        <button class="tab-btn" onclick="showTab('happ-guide', this)">Happ</button>
+        <button class="tab-btn" onclick="showTab('amnezia2-guide', this)">Amnezia V2</button>
       </div>
 
       <div id="amnezia-guide">
@@ -279,26 +279,29 @@
         </div>
       </div>
 
-      <div id="happ-guide" style="display:none;">
+      <div id="amnezia2-guide" style="display:none;">
         <ol style="padding-left:1.3rem; color:var(--muted2); font-size:14px; line-height:2.1; margin-bottom:1rem;">
-          <li>Добавь устройство, выбрав <strong style="color:var(--accent)">Happ</strong></li>
-          <li>Нажми <strong style="color:var(--text)">«Скопировать ссылку»</strong></li>
-          <li>Открой приложение <strong style="color:var(--text)">Happ</strong></li>
-          <li>Нажми «+» → «Добавить вручную» или «Из буфера»</li>
-          <li>Вставь ссылку — готово</li>
+          <li>Добавь устройство, выбрав <strong style="color:var(--accent)">Amnezia V2</strong></li>
+          <li>Нажми <strong style="color:var(--text)">«Скачать конфиг»</strong></li>
+          <li>Открой приложение <strong style="color:var(--text)">Amnezia VPN</strong></li>
+          <li>Нажми «+» → «Из файла» → выбери скачанный файл</li>
+          <li>Подключись</li>
         </ol>
-        <div style="font-size:12px; color:var(--muted); margin-bottom:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Скачать Happ</div>
+        <p style="font-size:13px; color:var(--muted2); margin-bottom:1rem;">
+          Amnezia V2 — резервный конфиг на том же сервере. Используй если основной не подключается.
+        </p>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:0.6rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">Скачать Amnezia VPN</div>
         <div class="platform-links">
-          <a class="platform-btn" href="https://apps.apple.com/app/happ-proxy-utility/id6504287215" target="_blank">
+          <a class="platform-btn" href="https://apps.apple.com/app/amneziawg/id6478942365" target="_blank">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
             <div class="platform-label"><span>App Store</span><span>iOS</span></div>
           </a>
-          <a class="platform-btn" href="https://play.google.com/store/apps/details?id=io.happ.proxy" target="_blank">
+          <a class="platform-btn" href="https://play.google.com/store/apps/details?id=org.amnezia.vpn" target="_blank">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.25.99.22l.06-.04 11.2-6.47-2.41-2.41-9.84 8.7zm-1.8-20.1C1.14 4 1 4.5 1 5.14v13.72c0 .64.14 1.14.38 1.48l.08.07 7.69-7.69v-.18L1.46 3.6l-.08.06zM20.1 10.3l-2.25-1.3-2.7 2.7 2.7 2.7 2.27-1.31c.65-.37.65-.98 0-1.79zM4.17.24L15.37 6.7l-2.41 2.42L3.12.41l.06-.04c.3-.2.67-.25.99-.13z"/></svg>
             <div class="platform-label"><span>Google Play</span><span>Android</span></div>
           </a>
-          <a class="platform-btn" href="https://github.com/happ-proxy/happ/releases/latest" target="_blank" style="grid-column:1/-1;">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          <a class="platform-btn" href="https://github.com/amnezia-vpn/amnezia-client/releases/latest" target="_blank" style="grid-column:1/-1;">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l6-1.32v6.57H3zm17 0v-7.5l-8 1.41V12h8zM3 13h6v6.42L3 18V13zm17 0h-8v6.83l8 1.41V13z"/></svg>
             <div class="platform-label"><span>Windows / macOS / Linux</span><span>GitHub Releases</span></div>
           </a>
         </div>
@@ -394,12 +397,12 @@
   function selectProto(proto) {
     selectedProto = proto;
     document.getElementById('proto-amnezia').classList.toggle('active', proto === 'amnezia');
-    document.getElementById('proto-vless').classList.toggle('active', proto === 'vless');
+    document.getElementById('proto-amnezia2').classList.toggle('active', proto === 'amnezia2');
   }
 
   function showTab(id, btn) {
     document.getElementById('amnezia-guide').style.display = 'none';
-    document.getElementById('happ-guide').style.display = 'none';
+    document.getElementById('amnezia2-guide').style.display = 'none';
     document.getElementById(id).style.display = 'block';
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -467,17 +470,7 @@
   const linkCache = {};
 
   async function preloadLinks(devices) {
-    for (const d of devices) {
-      if (d.protocol === 'vless' && !linkCache[d.id]) {
-        try {
-          const res = await fetch('/link/' + d.download_token);
-          if (res.ok) {
-            const data = await res.json();
-            linkCache[d.id] = data.link;
-          }
-        } catch {}
-      }
-    }
+    // Оба протокола используют скачивание конфига — preload не нужен
   }
 
   function renderDevices(devices) {
@@ -496,13 +489,10 @@
               ${esc(d.name)}
               ${d.paused ? '<span class="device-paused">(пауза)</span>' : ''}
             </div>
-            <div class="device-proto ${d.protocol}">${d.protocol === 'amnezia' ? 'AmneziaWG' : 'VLESS+Reality'}</div>
+            <div class="device-proto ${d.protocol}">${d.protocol === 'amnezia2' ? 'AmneziaWG V2' : 'AmneziaWG'}</div>
           </div>
           <div class="device-actions">
-            ${d.protocol === 'amnezia'
-              ? `<a class="btn-dl" href="/download/${d.download_token}">Скачать конфиг</a>`
-              : `<button class="btn-copy-link" id="copy-btn-${d.id}" onclick="copyLinkCached(${d.id})">Скопировать ссылку</button>`
-            }
+            <a class="btn-dl" href="/download/${d.download_token}">Скачать конфиг</a>
             <button class="btn-rm" onclick="removeDevice(${d.id})">✕</button>
           </div>
         </div>
