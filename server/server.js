@@ -85,6 +85,11 @@ db.exec(`
     created_at     INTEGER DEFAULT (unixepoch()),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS processed_payments (
+    payment_id   TEXT PRIMARY KEY,
+    processed_at INTEGER DEFAULT (unixepoch())
+  );
 `);
 
 // ── Middleware ──
@@ -176,20 +181,23 @@ function deactivateDevice(device) {
 // ── ЮКасса ──
 function yooRequest(method, path, body) {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify(body);
+    const data = body ? JSON.stringify(body) : null;
     const authHeader = Buffer.from(
       `${process.env.YOOKASSA_SHOP_ID}:${process.env.YOOKASSA_SECRET_KEY}`
     ).toString('base64');
+    const headers = {
+      'Authorization': `Basic ${authHeader}`,
+      'Idempotence-Key': crypto.randomBytes(16).toString('hex'),
+    };
+    if (data) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = Buffer.byteLength(data);
+    }
     const options = {
       hostname: 'api.yookassa.ru',
       path: `/v3/${path}`,
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${authHeader}`,
-        'Idempotence-Key': crypto.randomBytes(16).toString('hex'),
-        'Content-Length': Buffer.byteLength(data)
-      }
+      headers
     };
     const req = https.request(options, res => {
       let d = '';
@@ -197,7 +205,7 @@ function yooRequest(method, path, body) {
       res.on('end', () => resolve(JSON.parse(d)));
     });
     req.on('error', reject);
-    req.write(data);
+    if (data) req.write(data);
     req.end();
   });
 }
@@ -367,45 +375,64 @@ app.post('/api/payment/create', auth, async (req, res) => {
 
 // ── Webhook от ЮКассы ──
 app.post('/api/payment/webhook', async (req, res) => {
-  const { event, object } = req.body;
-  if (event === 'payment.succeeded') {
-    const userId = parseInt(object.metadata?.user_id);
-    const months = parseInt(object.metadata?.months) || 1;
-    if (!userId) return res.sendStatus(200);
-
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!user) return res.sendStatus(200);
-
-    const now = Math.floor(Date.now() / 1000);
-    const wasExpired = user.subscription_ends < now;
-    const base = Math.max(user.subscription_ends || now, now);
-    const new_ends = base + months * 30 * 24 * 3600;
-    db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, userId);
-
-    const currentDeviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(userId).cnt;
-    db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentDeviceCount, userId);
-
-    if (wasExpired) {
-      db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
-      const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
-      devices.forEach(d => activateDevice(d));
-    }
-
-    if (user.referred_by && !user.referral_rewarded) {
-      const referrer = db.prepare('SELECT * FROM users WHERE id = ?').get(user.referred_by);
-      if (referrer) {
-        const bonus = REFERRAL_BONUS_DAYS * 24 * 3600;
-        const referrerBase = Math.max(referrer.subscription_ends || now, now);
-        db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?')
-          .run(referrerBase + bonus, referrer.id);
-        db.prepare('UPDATE users SET referral_rewarded = 1 WHERE id = ?').run(userId);
-        console.log(`Referral bonus +${REFERRAL_BONUS_DAYS}d to ${referrer.email}`);
-      }
-    }
-
-    console.log(`Payment succeeded for ${user.email}, +${months} months`);
-  }
+  // Всегда отвечаем 200 сразу — YooKassa требует быстрый ответ
   res.sendStatus(200);
+
+  const paymentId = req.body?.object?.id;
+  if (req.body?.event !== 'payment.succeeded' || !paymentId) return;
+
+  // Идемпотентность: игнорируем повторные уведомления
+  const inserted = db.prepare(
+    'INSERT OR IGNORE INTO processed_payments (payment_id) VALUES (?)'
+  ).run(paymentId);
+  if (inserted.changes === 0) return;
+
+  // Верифицируем платёж напрямую через API ЮКассы — не доверяем телу вебхука
+  let payment;
+  try {
+    payment = await yooRequest('GET', `payments/${paymentId}`, null);
+  } catch(e) {
+    console.error('YooKassa verify error:', e.message);
+    return;
+  }
+
+  if (payment.status !== 'succeeded') return;
+
+  const userId = parseInt(payment.metadata?.user_id);
+  const months = parseInt(payment.metadata?.months) || 1;
+  if (!userId || !PERIODS[months]) return;
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) return;
+
+  const now = Math.floor(Date.now() / 1000);
+  const wasExpired = user.subscription_ends < now;
+  const base = Math.max(user.subscription_ends || now, now);
+  const new_ends = base + months * 30 * 24 * 3600;
+  db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?').run(new_ends, userId);
+
+  const currentDeviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(userId).cnt;
+  db.prepare('UPDATE users SET max_devices = ? WHERE id = ?').run(currentDeviceCount, userId);
+
+  if (wasExpired) {
+    db.prepare('UPDATE devices SET paused = 0 WHERE user_id = ?').run(userId);
+    const devices = db.prepare('SELECT * FROM devices WHERE user_id = ?').all(userId);
+    devices.forEach(d => activateDevice(d));
+  }
+
+  if (user.referred_by && !user.referral_rewarded) {
+    const referrer = db.prepare('SELECT * FROM users WHERE id = ?').get(user.referred_by);
+    if (referrer) {
+      const bonus = REFERRAL_BONUS_DAYS * 24 * 3600;
+      const referrerBase = Math.max(referrer.subscription_ends || now, now);
+      db.prepare('UPDATE users SET subscription_ends = ? WHERE id = ?')
+        .run(referrerBase + bonus, referrer.id);
+      db.prepare('UPDATE users SET referral_rewarded = 1 WHERE id = ?').run(userId);
+      console.log(`Referral bonus +${REFERRAL_BONUS_DAYS}d to ${referrer.email}`);
+    }
+  }
+
+  console.log(`Payment succeeded for ${user.email}, +${months} months`);
 });
 
 // ── Админ: все пользователи ──
