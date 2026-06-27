@@ -113,13 +113,12 @@
           <th>Email</th>
           <th>Устр.</th>
           <th>Зарегистрирован</th>
-          <th>Истекает</th>
-          <th>Осталось</th>
+          <th>Баланс</th>
           <th>Действие</th>
         </tr>
       </thead>
       <tbody id="users-tbody">
-        <tr><td colspan="8" style="text-align:center; color:var(--muted); padding: 2rem;">Загрузка...</td></tr>
+        <tr><td colspan="7" style="text-align:center; color:var(--muted); padding: 2rem;">Загрузка...</td></tr>
       </tbody>
     </table>
   </div>
@@ -129,16 +128,20 @@
   const token = localStorage.getItem('token');
   if (!token) window.location.href = '/login';
 
+  const PRICES_ADMIN = { 1: 150, 2: 200, 3: 250, 4: 300 };
+  function getDailyRate(deviceCount) {
+    return (PRICES_ADMIN[Math.min(Math.max(deviceCount, 1), 4)] || 150) / 30;
+  }
+
   let usersData = [];
   let statsData = {};
-  let tickInterval;
   let searchQuery = '';
 
   async function loadAll() {
     await Promise.all([loadUsers(), loadStats()]);
     renderTable();
     renderStats();
-    startTick();
+    setInterval(async () => { await loadStats(); renderStats(); }, 30000);
   }
 
   async function loadUsers() {
@@ -147,13 +150,13 @@
       if (res.status === 401) { logout(); return; }
       if (res.status === 403) {
         document.getElementById('users-tbody').innerHTML =
-          '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:2rem;">Нет доступа</td></tr>';
+          '<tr><td colspan="7" style="text-align:center;color:var(--red);padding:2rem;">Нет доступа</td></tr>';
         return;
       }
       usersData = await res.json();
     } catch {
       document.getElementById('users-tbody').innerHTML =
-        '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Ошибка загрузки</td></tr>';
+        '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Ошибка загрузки</td></tr>';
     }
   }
 
@@ -166,7 +169,7 @@
 
   function renderStats() {
     const now = Math.floor(Date.now() / 1000);
-    const active = usersData.filter(u => u.subscription_ends > now).length;
+    const active = usersData.filter(u => (u.balance || 0) > 0).length;
     const totalDevices = usersData.reduce((s, u) => s + (u.devices?.length || 0), 0);
 
     let onlineCount = 0;
@@ -223,17 +226,20 @@
     countEl.textContent = searchQuery ? `Найдено: ${filtered.length} из ${usersData.length}` : '';
 
     if (!usersData.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Нет пользователей</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Нет пользователей</td></tr>';
       return;
     }
     if (!filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem;">Ничего не найдено</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem;">Ничего не найдено</td></tr>';
       return;
     }
 
     tbody.innerHTML = filtered.map(u => {
-      const active = u.subscription_ends > now;
+      const balance = u.balance || 0;
+      const active = balance > 0;
       const devices = u.devices || [];
+      const daily = getDailyRate(devices.length);
+      const daysLeft = daily > 0 ? Math.floor(balance / daily) : 0;
 
       const devicesHtml = devices.map(d => {
         let onlineHtml = '<span style="color:var(--muted)">○ офлайн</span>';
@@ -280,25 +286,27 @@
           <td style="color:var(--muted2)">${highlight(u.email, searchQuery)}</td>
           <td style="text-align:center">${devices.length}</td>
           <td style="color:var(--muted2)">${formatDate(u.created_at)}</td>
-          <td style="color:var(--muted2)">${formatDateTime(u.subscription_ends)}</td>
-          <td><span class="time-left ${active ? 'active' : 'expired'}" id="tl-${u.id}">${timeLeft(u.subscription_ends)}</span></td>
+          <td>
+            <span class="time-left ${active ? 'active' : 'expired'}">${balance.toFixed(2)} ₽</span>
+            ${active ? `<span style="font-size:11px;color:var(--muted);display:block">~${daysLeft} дн.</span>` : ''}
+          </td>
           <td style="white-space:nowrap">
             <select id="sel-${u.id}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:0.2rem 0.5rem;font-size:12px;font-family:var(--font);margin-right:0.4rem;">
-              <option value="-720">−30д</option>
-              <option value="-168">−7д</option>
-              <option value="-24">−1д</option>
-              <option value="1">+1ч</option>
-              <option value="24">+1д</option>
-              <option value="168">+7д</option>
-              <option value="720" selected>+30д</option>
-              <option value="2160">+90д</option>
+              <option value="-300">−300 ₽</option>
+              <option value="-150">−150 ₽</option>
+              <option value="-50">−50 ₽</option>
+              <option value="50">+50 ₽</option>
+              <option value="100">+100 ₽</option>
+              <option value="150" selected>+150 ₽</option>
+              <option value="300">+300 ₽</option>
+              <option value="500">+500 ₽</option>
             </select>
             <button class="extend-btn" onclick="extend(${u.id})">Применить</button>
             <button class="delete-btn" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Удалить</button>
           </td>
         </tr>
         <tr class="devices-row" id="devices-row-${u.id}">
-          <td colspan="8">
+          <td colspan="7">
             <table class="devices-subtable">
               <thead>
                 <tr>
@@ -326,39 +334,20 @@
     btn.textContent = isOpen ? '▶' : '▼';
   }
 
-  function startTick() {
-    if (tickInterval) clearInterval(tickInterval);
-    tickInterval = setInterval(() => {
-      filterUsers().forEach(u => {
-        const el = document.getElementById('tl-' + u.id);
-        if (!el) return;
-        const active = u.subscription_ends > Math.floor(Date.now() / 1000);
-        el.textContent = timeLeft(u.subscription_ends);
-        el.className = 'time-left ' + (active ? 'active' : 'expired');
-      });
-      renderStats();
-    }, 1000);
-
-    setInterval(async () => {
-      await loadStats();
-      renderStats();
-    }, 30000);
-  }
-
   async function extend(userId) {
     const sel = document.getElementById('sel-' + userId);
-    const hours = parseInt(sel.value);
+    const rubles = parseFloat(sel.value);
     try {
       const res = await fetch('/api/admin/extend/' + userId, {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hours })
+        body: JSON.stringify({ rubles })
       });
       const data = await res.json();
       if (data.success) {
         const user = usersData.find(u => u.id === userId);
-        if (user) user.subscription_ends = data.subscription_ends;
-        renderTable(); startTick(); renderStats();
+        if (user) user.balance = data.balance;
+        renderTable(); renderStats();
       }
     } catch { alert('Ошибка'); }
   }
@@ -399,17 +388,6 @@
     } catch { alert('Ошибка соединения'); }
   }
 
-  function timeLeft(unix) {
-    const diff = unix * 1000 - Date.now();
-    if (diff <= 0) return 'истекла';
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-    if (h >= 24) return `${Math.floor(h / 24)}д ${h % 24}ч`;
-    if (h > 0) return `${h}ч ${pad(m)}м ${pad(s)}с`;
-    return `${pad(m)}м ${pad(s)}с`;
-  }
-
   function fmtBytes(bytes) {
     if (!bytes) return '0B';
     if (bytes < 1024) return bytes + 'B';
@@ -418,7 +396,6 @@
     return (bytes / 1073741824).toFixed(2) + 'GB';
   }
 
-  function pad(n) { return String(n).padStart(2, '0'); }
   function formatDate(unix) { return new Date(unix * 1000).toLocaleDateString('ru-RU'); }
   function formatDateTime(unix) {
     return new Date(unix * 1000).toLocaleString('ru-RU', {
