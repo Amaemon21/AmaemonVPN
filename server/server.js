@@ -365,7 +365,7 @@ app.get('/download/:token', (req, res) => {
 
   if (device.protocol === 'amnezia2') {
     let conf = fs.readFileSync(device.config_path, 'utf8');
-    conf = conf.replace(/Endpoint\s*=\s*[\d.]+:\d+/, 'Endpoint = 185.171.82.68:51820');
+    conf = conf.replace(/Endpoint\s*=\s*[\d.]+:\d+/, 'Endpoint = 81.26.188.164:51820');
     res.setHeader('Content-Disposition', `attachment; filename="amaemonvpn_v2_${safeName}.conf"`);
     res.setHeader('Content-Type', 'text/plain');
     res.send(conf);
