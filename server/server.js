@@ -607,6 +607,31 @@ function checkBalances() {
     devices.forEach(d => deactivateDevice(d));
     db.prepare('UPDATE devices SET paused = 1 WHERE user_id = ?').run(u.id);
   });
+
+  // Синхронизация с awg: пиры, помеченные paused=1 в БД, но всё ещё активные в awg — удалить
+  try {
+    const wgOutput = execSync('sudo awg show awg0 dump').toString();
+    const activeInWg = new Set();
+    wgOutput.split('\n').slice(1).forEach(line => {
+      const parts = line.split('\t');
+      if (parts.length >= 1 && parts[0].trim()) activeInWg.add(parts[0].trim());
+    });
+
+    const pausedDevices = db.prepare('SELECT * FROM devices WHERE paused = 1').all();
+    pausedDevices.forEach(d => {
+      try {
+        const pubKey = fs.readFileSync(
+          `/etc/amnezia/amneziawg/clients/${d.client_name}/public.key`, 'utf8'
+        ).trim();
+        if (activeInWg.has(pubKey)) {
+          execSync(`sudo awg set awg0 peer ${pubKey} remove`);
+          console.log(`Removed ghost peer ${d.client_name} from awg`);
+        }
+      } catch(e) {}
+    });
+  } catch(e) {
+    console.error('Ghost peer cleanup error:', e.message);
+  }
 }
 
 setInterval(checkBalances, 60 * 60 * 1000); // каждый час
