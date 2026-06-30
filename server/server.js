@@ -14,7 +14,7 @@ app.use(express.json());
 
 // ── Константы ──
 const JWT_SECRET = crypto.randomBytes(64).toString('hex');
-const ADMIN_EMAIL = 'toitol@mail.ru';
+const ADMIN_EMAILS = ['toitol@mail.ru', 'jjkatr18@mail.ru'];
 const DB_PATH = '/var/www/amaemonvpn/server/vpn.db';
 const SITE_URL = 'https://amaemonvpn.ru';
 const MAX_DEVICES = 4;
@@ -125,7 +125,7 @@ function auth(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (req.user.email !== ADMIN_EMAIL)
+  if (!ADMIN_EMAILS.includes(req.user.email))
     return res.status(403).json({ error: 'Forbidden' });
   next();
 }
