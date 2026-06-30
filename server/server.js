@@ -482,13 +482,8 @@ app.get('/api/admin/users', auth, adminOnly, (req, res) => {
   res.json(result);
 });
 
-// ── Админ: пополнить/списать баланс ──
-app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
-  const { rubles } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const amount = parseFloat(rubles) || 0;
+// ── Применить изменение баланса к пользователю (активация/деактивация устройств) ──
+function adjustBalance(user, amount) {
   const wasEmpty = user.balance <= 0;
   const newBalance = Math.max((user.balance || 0) + amount, 0);
 
@@ -505,6 +500,32 @@ app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
     devices.forEach(d => deactivateDevice(d));
     db.prepare('UPDATE devices SET paused = 1 WHERE user_id = ?').run(user.id);
   }
+
+  return newBalance;
+}
+
+// ── Админ: пополнить/списать баланс (в рублях) ──
+app.post('/api/admin/extend/:id', auth, adminOnly, (req, res) => {
+  const { rubles } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const amount = parseFloat(rubles) || 0;
+  const newBalance = adjustBalance(user, amount);
+
+  res.json({ success: true, balance: newBalance });
+});
+
+// ── Админ: добавить/убавить дни подписки ──
+app.post('/api/admin/days/:id', auth, adminOnly, (req, res) => {
+  const { days } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const deviceCount = db.prepare('SELECT COUNT(*) as cnt FROM devices WHERE user_id = ?').get(user.id).cnt;
+  const effectiveCount = Math.max(deviceCount, user.max_devices || 0);
+  const amount = (parseFloat(days) || 0) * dailyRate(effectiveCount);
+  const newBalance = adjustBalance(user, amount);
 
   res.json({ success: true, balance: newBalance });
 });

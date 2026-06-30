@@ -302,6 +302,8 @@
               <option value="500">+500 ₽</option>
             </select>
             <button class="extend-btn" onclick="extend(${u.id})">Применить</button>
+            <button class="extend-btn" onclick="addDays(${u.id}, -1)">−1 день</button>
+            <button class="extend-btn" onclick="addDays(${u.id}, 1)">+1 день</button>
             <button class="delete-btn" onclick="deleteUser(${u.id}, '${esc(u.email)}')">Удалить</button>
           </td>
         </tr>
@@ -342,6 +344,22 @@
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ rubles })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const user = usersData.find(u => u.id === userId);
+        if (user) user.balance = data.balance;
+        renderTable(); renderStats();
+      }
+    } catch { alert('Ошибка'); }
+  }
+
+  async function addDays(userId, days) {
+    try {
+      const res = await fetch('/api/admin/days/' + userId, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days })
       });
       const data = await res.json();
       if (data.success) {
